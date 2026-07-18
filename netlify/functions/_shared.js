@@ -2,7 +2,6 @@ const {
   extractRecords,
   getWatiSummary,
   metricConfig,
-  sampleConversations,
   watiClient
 } = require("../../src/wati-summary-service");
 
@@ -22,6 +21,5 @@ module.exports = {
   config: metricConfig,
   extractRecords,
   getWatiSummary,
-  json,
-  sampleConversations
+  json
 };

@@ -57,8 +57,9 @@ Phase 1 focuses only on WATI. No Sindh Officers Academy logic, data model, workf
 - Team workload panel.
 - Agent and counselor workload panel.
 - Program bucket panel.
-- Sample mode when WATI credentials are not configured.
-- Live discovery mode while exact WATI endpoint payloads are being confirmed.
+- Empty setup/sync state when real data is not available.
+- Supabase sync mode after WATI data has been imported.
+- Live discovery mode for inspecting real WATI endpoint payloads.
 
 ### WATI Discovery
 
@@ -68,7 +69,7 @@ The first integration step is endpoint discovery. The dashboard should test comm
 - URL attempted
 - Status
 - Payload shape
-- Sanitized sample data
+- Sanitized real response excerpt
 - Failure details without exposing tokens
 
 This lets the team confirm the real account payload before locking the production data mapping.
@@ -96,7 +97,7 @@ These events should maintain:
 - Static dashboard hosted from `public/`.
 - Fetches summary data from `/api/wati/summary`.
 - Refreshes frequently for live operations use.
-- Shows sample data when credentials or live data are unavailable.
+- Shows only real Supabase/WATI data. If no real data is available, it shows an empty sync/setup state.
 
 ### Local Backend
 
@@ -177,7 +178,7 @@ Explicit WATI custom fields should take priority over inferred tags or text.
 
 ## Deployment Plan
 
-1. Keep phase 1 running locally with sample mode and WATI discovery.
+1. Keep phase 1 running locally with WATI discovery and real-data sync only.
 2. Confirm WATI base URL and API token.
 3. Run WATI discovery and inspect payload shapes.
 4. Map real WATI fields to normalized conversation fields.

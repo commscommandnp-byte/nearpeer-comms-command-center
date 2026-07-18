@@ -26,47 +26,25 @@ async function getWatiSummary({ client = watiClient(), config = metricConfig() }
     ok: false,
     error: error.code || error.message
   }));
-  if (supabase.ok && supabase.summary.totals.open > 0) return supabase;
+  if (supabase.ok) return supabase;
 
   if (!client.isConfigured()) {
     return {
-      ok: true,
-      mode: "sample",
-      note: "Add WATI credentials to switch this screen to live data.",
-      summary: summarize(sampleConversations(), config)
-    };
-  }
-
-  try {
-    const discovery = await client.discover();
-    const usable = discovery.find((item) => item.ok && ["conversations", "tickets", "messages", "contacts"].includes(item.name));
-    if (!usable) {
-      return {
-        ok: false,
-        mode: "sample",
-        error: "No usable WATI list endpoint found yet.",
-        discovery,
-        summary: summarize(sampleConversations(), config)
-      };
-    }
-
-    const response = await client.request(usable.endpoint);
-    const records = extractRecords(response.data);
-    return {
-      ok: true,
-      mode: "live-discovery",
-      source: usable.name,
-      summary: summarize(records.length ? records : sampleConversations(), config),
-      discovery
-    };
-  } catch (error) {
-    return {
       ok: false,
-      mode: "sample",
-      error: error.code || error.message,
-      summary: summarize(sampleConversations(), config)
+      mode: "setup-required",
+      error: supabase.error || "WATI_NOT_CONFIGURED",
+      note: "Configure Supabase and run WATI sync to populate real data.",
+      summary: summarize([], config)
     };
   }
+
+  return {
+    ok: false,
+    mode: "sync-required",
+    error: supabase.error || "SUPABASE_SYNC_REQUIRED",
+    note: "Run /api/wati/sync to populate real WATI data.",
+    summary: summarize([], config)
+  };
 }
 
 async function getSupabaseSummary(config) {
@@ -119,76 +97,10 @@ function extractRecords(value) {
   return [];
 }
 
-function minutesAgo(minutes) {
-  return new Date(Date.now() - minutes * 60000).toISOString();
-}
-
-function sampleConversations() {
-  return [
-    {
-      conversationId: "sample-001",
-      senderName: "Ali Raza",
-      waId: "923001111111",
-      teamName: "Admin",
-      operatorName: "",
-      tags: ["CSS"],
-      text: "I paid but nobody assigned my lead",
-      created: minutesAgo(18),
-      lastCustomerMessageAt: minutesAgo(18)
-    },
-    {
-      conversationId: "sample-002",
-      senderName: "Maham Khan",
-      waId: "923002222222",
-      teamName: "Access",
-      operatorName: "Danish Access",
-      operatorEmail: "danish@nearpeer.org",
-      tags: ["Access", "MDCAT"],
-      lastCustomerMessageAt: minutesAgo(42),
-      lastAgentReplyAt: minutesAgo(71),
-      assignedAt: minutesAgo(76)
-    },
-    {
-      conversationId: "sample-003",
-      senderName: "Usman Tariq",
-      waId: "923003333333",
-      teamName: "Counseling",
-      operatorName: "Hamza CSS",
-      operatorEmail: "hamza@nearpeer.org",
-      tags: ["CSS"],
-      lastCustomerMessageAt: minutesAgo(8),
-      lastAgentReplyAt: minutesAgo(20),
-      assignedAt: minutesAgo(27)
-    },
-    {
-      conversationId: "sample-004",
-      senderName: "Hira Shah",
-      waId: "923004444444",
-      teamName: "Counseling",
-      operatorName: "Fatima CA",
-      tags: ["CA"],
-      lastCustomerMessageAt: minutesAgo(1418),
-      lastAgentReplyAt: minutesAgo(1435),
-      assignedAt: minutesAgo(1440)
-    },
-    {
-      conversationId: "sample-005",
-      senderName: "Bilal Ahmed",
-      waId: "923005555555",
-      teamName: "Admin",
-      operatorName: "Admin Account",
-      tags: ["MDCAT", "Payment"],
-      lastCustomerMessageAt: minutesAgo(31),
-      assignedAt: minutesAgo(29)
-    }
-  ];
-}
-
 module.exports = {
   extractRecords,
   getWatiSummary,
   getSupabaseSummary,
   metricConfig,
-  sampleConversations,
   watiClient
 };

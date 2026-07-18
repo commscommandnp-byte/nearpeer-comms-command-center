@@ -97,9 +97,10 @@ function render(data) {
 }
 
 function modeLabel(mode) {
-  if (mode === "sample") return "Sample mode";
   if (mode === "supabase-sync") return "Supabase sync";
   if (mode === "supabase-empty") return "Supabase ready";
+  if (mode === "sync-required") return "Sync required";
+  if (mode === "setup-required") return "Setup required";
   return "Live WATI";
 }
 
