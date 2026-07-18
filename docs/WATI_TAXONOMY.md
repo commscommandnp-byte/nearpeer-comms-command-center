@@ -146,3 +146,37 @@ Temporary WATI sync is not the final source of truth for WATI inbox state. Until
 - A chat is action-required only when the latest known customer message is newer than the latest known Nearpeer/business reply.
 - Contacts with only outgoing/business-side recent messages should not be counted as waiting students.
 - Solved/Open state will become more accurate after webhook forwarding provides live conversation status events.
+
+## Assignment Control Model
+
+The command center now treats WATI work as five lanes:
+
+- Admin dispatch
+- CSS assigned to me
+- MDCAT assigned to me
+- CA assigned to me
+- Access & Support
+
+Admin dispatch answers:
+
+- How many leads are still held by Admin?
+- How many pending Admin leads need assignment?
+- How many active Admin-held leads are about to expire?
+- What is the oldest pending Admin wait?
+
+Program lanes answer:
+
+- How many leads are assigned to the CSS/MDCAT/CA lane?
+- How many are waiting for reply?
+- How many have been catered/replied?
+- What was the first and last lead time in that lane?
+- Are assigned leads mapped to active counselors?
+
+Access & Support answers:
+
+- How many leads are assigned to Access/Support?
+- How many are waiting?
+- How many have been catered?
+- Which issue categories are present, such as Access, Login, Technical, Payment, or Refund?
+
+Active counselor status is controlled by the `WATI_ACTIVE_COUNSELORS` environment variable. Add a comma-separated list of active counselor names exactly as they appear in WATI tags.

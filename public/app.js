@@ -47,6 +47,7 @@ function render(data) {
   const agents = summary.agents || [];
   const programs = summary.programs || [];
   const actions = summary.actionRequired || [];
+  const operations = data.operations || {};
   const pressure = totals.open ? Math.min(100, Math.round(((totals.delayedReplies + totals.unassigned + totals.criticalExpiry) / Math.max(1, totals.open * 2)) * 100)) : 0;
 
   $("syncStatus").textContent = `Updated ${new Date(summary.generatedAt).toLocaleTimeString()}`;
@@ -68,6 +69,7 @@ function render(data) {
   $("actionCount").textContent = `${actions.length} ${actions.length === 1 ? "item" : "items"}`;
   $("holoCore").textContent = totals.open;
   renderHologram(totals);
+  renderOperations(operations);
   $("pressureFill").style.width = `${pressure}%`;
   $("pressureCopy").textContent = `${pressure}% pressure from delayed, unassigned, and critical expiry signals.`;
 
@@ -94,6 +96,67 @@ function render(data) {
   $("teamRows").innerHTML = teams.map(renderCompactRow).join("");
   $("agentRows").innerHTML = agents.map(renderCompactRow).join("");
   $("programRows").innerHTML = programs.map(renderProgramCard).join("");
+}
+
+function renderOperations(operations) {
+  const admin = operations.admin || {};
+  const access = operations.access || {};
+  $("opsDataBadge").textContent = operations.activeCounselorsConfigured ? "Active counselors set" : "Active list pending";
+  $("adminPending").textContent = admin.pendingDispatch ?? 0;
+  $("adminHeldCount").textContent = admin.assignedToAdmin ?? 0;
+  $("adminExpiringCount").textContent = admin.activeExpiring ?? 0;
+  $("adminOldestPending").textContent = minutes(admin.oldestWaitingMinutes);
+  $("adminLaneRows").innerHTML = renderLaneMiniRows(admin.rows || []);
+
+  $("accessWaiting").textContent = access.waiting ?? 0;
+  $("accessAssigned").textContent = access.assigned ?? 0;
+  $("accessCatered").textContent = access.catered ?? 0;
+  $("accessLastAssigned").textContent = timeAgo(access.lastAssignedAt);
+  $("accessIssueRows").innerHTML = (access.issueBreakdown || [])
+    .slice(0, 5)
+    .map((item) => `<span>${escapeHtml(item.name)} <b>${item.count}</b></span>`)
+    .join("") || `<span>General <b>${access.assigned || 0}</b></span>`;
+
+  $("programLaneRows").innerHTML = (operations.programs || []).map(renderProgramLane).join("");
+}
+
+function renderProgramLane(lane) {
+  const coverageText = lane.activeCounselorsKnown
+    ? `${lane.activeCounselorAssigned} active | ${lane.inactiveCounselorAssigned} inactive`
+    : "active counselor list pending";
+  return `
+    <article class="program-lane-card">
+      <div class="ops-card-head">
+        <div>
+          <span>${escapeHtml(lane.name)} Assigned To Me</span>
+          <strong>${lane.waiting}</strong>
+        </div>
+        <small>waiting</small>
+      </div>
+      <div class="ops-stats">
+        <div><b>${lane.assigned}</b><span>assigned</span></div>
+        <div><b>${lane.catered}</b><span>replied/catered</span></div>
+        <div><b>${timeAgo(lane.lastAssignedAt)}</b><span>last lead</span></div>
+        <div><b>${timeAgo(lane.firstAssignedAt)}</b><span>first lead</span></div>
+      </div>
+      <p class="coverage-line">${escapeHtml(coverageText)}</p>
+      <div class="lane-mini-list">${renderLaneMiniRows(lane.rows || [])}</div>
+    </article>
+  `;
+}
+
+function renderLaneMiniRows(rows) {
+  if (!rows.length) return `<div class="lane-empty">No waiting leads.</div>`;
+  return rows
+    .map(
+      (row) => `
+        <div class="lane-mini-row">
+          <div><strong>${escapeHtml(row.studentName)}</strong><span>${escapeHtml(row.phone || "")}</span></div>
+          <div><b>${minutes(row.waitingMinutes)}</b><span>${escapeHtml(row.counselor || row.owner || "-")}</span></div>
+        </div>
+      `
+    )
+    .join("");
 }
 
 function modeLabel(mode) {

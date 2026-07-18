@@ -13,6 +13,7 @@
         <nav class="rail-nav">
           <a class="active" href="#ops">Ops</a>
           <a href="#queue">Queue</a>
+          <a href="#assignment">Lanes</a>
           <a href="#teams">Teams</a>
           <a href="#programs">Programs</a>
         </nav>
@@ -108,6 +109,52 @@
             <strong id="metricAgents">-</strong>
             <small>active owners</small>
           </article>
+        </section>
+
+        <section class="panel ops-panel" id="assignment">
+          <div class="panel-head">
+            <div>
+              <p class="section-kicker">Assignment Control</p>
+              <h2>Admin, Counseling & Access Lanes</h2>
+            </div>
+            <span id="opsDataBadge">Real data</span>
+          </div>
+
+          <div class="ops-grid">
+            <article class="ops-card admin-lane">
+              <div class="ops-card-head">
+                <div>
+                  <span>Admin Dispatch</span>
+                  <strong id="adminPending">-</strong>
+                </div>
+                <small>pending assignment</small>
+              </div>
+              <div class="ops-stats">
+                <div><b id="adminHeldCount">-</b><span>held in Admin</span></div>
+                <div><b id="adminExpiringCount">-</b><span>expiring active</span></div>
+                <div><b id="adminOldestPending">-</b><span>oldest wait</span></div>
+              </div>
+              <div id="adminLaneRows" class="lane-mini-list"></div>
+            </article>
+
+            <article class="ops-card access-lane">
+              <div class="ops-card-head">
+                <div>
+                  <span>Access & Support</span>
+                  <strong id="accessWaiting">-</strong>
+                </div>
+                <small>waiting</small>
+              </div>
+              <div class="ops-stats">
+                <div><b id="accessAssigned">-</b><span>assigned</span></div>
+                <div><b id="accessCatered">-</b><span>catered</span></div>
+                <div><b id="accessLastAssigned">-</b><span>last lead</span></div>
+              </div>
+              <div id="accessIssueRows" class="issue-pills"></div>
+            </article>
+          </div>
+
+          <div id="programLaneRows" class="program-lane-grid"></div>
         </section>
 
         <section class="layout-grid">

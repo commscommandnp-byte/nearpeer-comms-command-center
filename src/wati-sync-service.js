@@ -109,6 +109,7 @@ function normalizeContactConversation(contact, conversationId, waId) {
     tags: insights.normalizedTags,
     custom_attributes: enrichedAttributes,
     first_seen_at: parseDate(firstPresent(contact, ["created", "createdAt"])),
+    assigned_at: parseDate(firstPresent(contact, ["last_updated", "lastUpdated", "updatedAt", "created", "createdAt"])),
     raw: { source: "wati-contact-sync", contact },
     updated_at: new Date().toISOString()
   };

@@ -54,7 +54,9 @@ function normalizeConversation(raw, config = {}) {
   const hasPendingCustomerReply = Boolean(lastCustomerDate && (!lastAgentDate || lastCustomerDate.getTime() > lastAgentDate.getTime()));
   const assignedAt = firstPresent(raw, ["assignedAt", "assignedTime", "operatorAssignedAt", "created"]);
   const status = firstPresent(raw, ["status", "statusString", "ticketStatus", "conversationStatus"]) || "open";
-  const program = inferProgram({ tags, customAttributes, team, text: firstPresent(raw, ["text", "lastMessage"]) }, config);
+  const program =
+    firstPresent(raw, ["program", "course", "category", "leadType"]) ||
+    inferProgram({ tags, customAttributes, team, text: firstPresent(raw, ["text", "lastMessage"]) }, config);
 
   return {
     id: firstPresent(raw, ["conversationId", "ticketId", "id", "_id"]),

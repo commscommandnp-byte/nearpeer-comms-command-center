@@ -2,6 +2,7 @@ const { csv, number } = require("./env");
 const { WatiClient } = require("./wati-client");
 const { summarize } = require("./wati-metrics");
 const { isSupabaseConfigured, supabaseRequest } = require("./supabase-client");
+const { buildOpsLanes } = require("./ops-lanes");
 
 function metricConfig() {
   return {
@@ -64,6 +65,7 @@ async function getSupabaseSummary(config) {
     mode: rows.length ? "supabase-sync" : "supabase-empty",
     source: "supabase",
     summary: summarize(rows.map(mapSupabaseConversation), config),
+    operations: buildOpsLanes(rows.map(mapSupabaseConversation), config),
     syncedConversations: rows.length
   };
 }
