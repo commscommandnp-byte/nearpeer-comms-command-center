@@ -103,19 +103,19 @@ function renderOperations(operations) {
   const access = operations.access || {};
   $("opsDataBadge").textContent = operations.activeCounselorsConfigured ? "Active counselors set" : "Active list pending";
   $("adminPending").textContent = admin.pendingDispatch ?? 0;
-  $("adminHeldCount").textContent = admin.assignedToAdmin ?? 0;
+  $("adminHeldCount").textContent = admin.assignedToMe ?? 0;
   $("adminExpiringCount").textContent = admin.activeExpiring ?? 0;
   $("adminOldestPending").textContent = minutes(admin.oldestWaitingMinutes);
   $("adminLaneRows").innerHTML = renderLaneMiniRows(admin.rows || []);
 
   $("accessWaiting").textContent = access.waiting ?? 0;
-  $("accessAssigned").textContent = access.assigned ?? 0;
+  $("accessAssigned").textContent = access.assignedToMe ?? 0;
   $("accessCatered").textContent = access.catered ?? 0;
   $("accessLastAssigned").textContent = timeAgo(access.lastAssignedAt);
   $("accessIssueRows").innerHTML = (access.issueBreakdown || [])
     .slice(0, 5)
     .map((item) => `<span>${escapeHtml(item.name)} <b>${item.count}</b></span>`)
-    .join("") || `<span>General <b>${access.assigned || 0}</b></span>`;
+    .join("") || `<span>General <b>${access.assignedToMe || 0}</b></span>`;
 
   $("programLaneRows").innerHTML = (operations.programs || []).map(renderProgramLane).join("");
 }
@@ -128,13 +128,13 @@ function renderProgramLane(lane) {
     <article class="program-lane-card">
       <div class="ops-card-head">
         <div>
-          <span>${escapeHtml(lane.name)} Assigned To Me</span>
+          <span>${escapeHtml(lane.name)}</span>
           <strong>${lane.waiting}</strong>
         </div>
-        <small>waiting</small>
+        <small>Assigned to me waiting</small>
       </div>
       <div class="ops-stats">
-        <div><b>${lane.assigned}</b><span>assigned</span></div>
+        <div><b>${lane.assignedToMe}</b><span>Assigned to me</span></div>
         <div><b>${lane.catered}</b><span>replied/catered</span></div>
         <div><b>${timeAgo(lane.lastAssignedAt)}</b><span>last lead</span></div>
         <div><b>${timeAgo(lane.firstAssignedAt)}</b><span>first lead</span></div>

@@ -1,13 +1,35 @@
 const { csv } = require("./env");
 const { normalizeConversation } = require("./wati-metrics");
 
-const PROGRAM_LANES = ["CSS", "MDCAT", "CA"];
+const TEAM_ACCOUNT_LANES = [
+  {
+    key: "css",
+    name: "CSS Counseling Team",
+    programs: ["CSS"],
+    accountNamesEnv: "WATI_CSS_ACCOUNT_NAMES",
+    defaultAccountNames: ["CSS Counseling Team", "CSS Counselors", "CSS"]
+  },
+  {
+    key: "mdcat",
+    name: "MDCAT Team",
+    programs: ["MDCAT"],
+    accountNamesEnv: "WATI_MDCAT_ACCOUNT_NAMES",
+    defaultAccountNames: ["MDCAT Team", "MDCAT"]
+  },
+  {
+    key: "ca",
+    name: "CA Team",
+    programs: ["CA"],
+    accountNamesEnv: "WATI_CA_ACCOUNT_NAMES",
+    defaultAccountNames: ["CA Team", "CA"]
+  }
+];
 
 function opsConfig() {
   return {
     activeCounselors: new Set(csv("WATI_ACTIVE_COUNSELORS", []).map((name) => normalizeName(name))),
     adminNames: csv("WATI_ADMIN_OWNER_NAMES", ["Admin Team", "Admin Account", "Admin"]).map((name) => normalizeName(name)),
-    accessRoles: ["Access", "Support"]
+    accessNames: csv("WATI_ACCESS_ACCOUNT_NAMES", ["Access & Support", "Access", "Support"]).map((name) => normalizeName(name))
   };
 }
 
@@ -15,7 +37,7 @@ function buildOpsLanes(conversations, metricConfig = {}, config = opsConfig()) {
   const normalized = conversations.map((item) => normalizeConversation(item, metricConfig));
   const open = normalized.filter((item) => !/closed|resolved|solved|blocked/i.test(String(item.status)));
   const admin = buildAdminLane(open, config);
-  const programs = PROGRAM_LANES.map((program) => buildProgramLane(open, program, config));
+  const programs = TEAM_ACCOUNT_LANES.map((lane) => buildTeamAccountLane(open, lane, config));
   const access = buildAccessLane(open, config);
 
   return {
@@ -29,12 +51,12 @@ function buildOpsLanes(conversations, metricConfig = {}, config = opsConfig()) {
 
 function buildAdminLane(items, config) {
   const adminItems = items.filter((item) => isAdminItem(item, config));
-  const pendingDispatch = adminItems.filter((item) => item.hasPendingCustomerReply && !hasRealOwner(item, config));
+  const pendingDispatch = adminItems.filter((item) => item.hasPendingCustomerReply);
   const activeExpiring = adminItems.filter((item) => isExpiring(item));
 
   return {
-    name: "Admin dispatch",
-    assignedToAdmin: adminItems.length,
+    name: "Admin Team",
+    assignedToMe: adminItems.length,
     pendingDispatch: pendingDispatch.length,
     activeExpiring: activeExpiring.length,
     firstPendingAt: earliest(pendingDispatch.map((item) => item.lastCustomerMessageAt || item.createdAt)),
@@ -44,8 +66,9 @@ function buildAdminLane(items, config) {
   };
 }
 
-function buildProgramLane(items, program, config) {
-  const laneItems = items.filter((item) => normalizeProgram(item.program) === program);
+function buildTeamAccountLane(items, lane, config) {
+  const accountNames = csv(lane.accountNamesEnv, lane.defaultAccountNames).map((name) => normalizeName(name));
+  const laneItems = items.filter((item) => isTeamAccountItem(item, lane, accountNames));
   const waiting = laneItems.filter((item) => item.hasPendingCustomerReply);
   const catered = laneItems.filter((item) => !item.hasPendingCustomerReply);
   const assignedToActive = laneItems.filter((item) => isActiveCounselor(item.counselor, config));
@@ -54,8 +77,9 @@ function buildProgramLane(items, program, config) {
     : [];
 
   return {
-    name: program,
-    assigned: laneItems.length,
+    key: lane.key,
+    name: lane.name,
+    assignedToMe: laneItems.length,
     waiting: waiting.length,
     catered: catered.length,
     firstAssignedAt: earliest(laneItems.map((item) => item.assignedAt || item.createdAt || item.lastCustomerMessageAt)),
@@ -72,15 +96,17 @@ function buildAccessLane(items, config) {
   const laneItems = items.filter((item) => {
     const attrs = item.raw?.customAttributes || item.raw?.custom_attributes || {};
     const issue = String(attrs.issueCategory || "").toLowerCase();
-    const role = String(attrs.ownerRole || item.team || "").toLowerCase();
-    return config.accessRoles.some((entry) => role.includes(entry.toLowerCase())) || /access|login|technical|support/.test(issue);
+    const role = normalizeName(attrs.ownerRole || item.team);
+    const owner = normalizeName(attrs.ownerName || item.assignedTo);
+    const tags = normalizeTagsForMatch(item.tags);
+    return config.accessNames.some((entry) => matchesName(owner, entry) || matchesName(role, entry) || matchesName(tags, entry)) || /access|login|technical|support/.test(issue);
   });
   const waiting = laneItems.filter((item) => item.hasPendingCustomerReply);
   const catered = laneItems.filter((item) => !item.hasPendingCustomerReply);
 
   return {
     name: "Access & Support",
-    assigned: laneItems.length,
+    assignedToMe: laneItems.length,
     waiting: waiting.length,
     catered: catered.length,
     firstAssignedAt: earliest(laneItems.map((item) => item.assignedAt || item.createdAt || item.lastCustomerMessageAt)),
@@ -118,13 +144,20 @@ function issueBreakdown(items) {
 function isAdminItem(item, config) {
   const team = normalizeName(item.team);
   const owner = normalizeName(item.assignedTo);
-  return /admin/.test(team) || config.adminNames.some((name) => owner.includes(name) || team.includes(name));
+  const tags = normalizeTagsForMatch(item.tags);
+  return /admin/.test(team) || config.adminNames.some((name) => matchesName(owner, name) || matchesName(team, name) || matchesName(tags, name));
 }
 
-function hasRealOwner(item, config) {
+function isTeamAccountItem(item, lane, accountNames) {
+  const program = normalizeProgram(item.program);
+  const team = normalizeName(item.team);
   const owner = normalizeName(item.assignedTo);
-  if (!owner) return false;
-  return !config.adminNames.some((name) => owner.includes(name));
+  const counselor = normalizeName(item.counselor);
+  const tags = normalizeTagsForMatch(item.tags);
+  return (
+    lane.programs.includes(program) ||
+    accountNames.some((name) => matchesName(team, name) || matchesName(owner, name) || matchesName(counselor, name) || matchesName(tags, name))
+  );
 }
 
 function isExpiring(item) {
@@ -140,6 +173,23 @@ function isActiveCounselor(name, config) {
 
 function normalizeName(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function normalizeTagsForMatch(value) {
+  if (!Array.isArray(value)) return "";
+  return value.map((item) => normalizeName(item)).join(" | ");
+}
+
+function matchesName(haystack, needle) {
+  if (!needle) return false;
+  if (needle.length <= 3) {
+    return new RegExp(`(^|[^a-z0-9])${escapeRegex(needle)}($|[^a-z0-9])`, "i").test(haystack);
+  }
+  return haystack.includes(needle);
+}
+
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function normalizeProgram(value) {
