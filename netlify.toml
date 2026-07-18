@@ -25,3 +25,8 @@
   from = "/api/wati/webhook"
   to = "/.netlify/functions/wati-webhook"
   status = 200
+
+[[redirects]]
+  from = "/api/wati/sync"
+  to = "/.netlify/functions/wati-sync"
+  status = 200

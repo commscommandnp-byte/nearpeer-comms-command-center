@@ -50,7 +50,7 @@ function render(data) {
   const pressure = totals.open ? Math.min(100, Math.round(((totals.delayedReplies + totals.unassigned + totals.criticalExpiry) / Math.max(1, totals.open * 2)) * 100)) : 0;
 
   $("syncStatus").textContent = `Updated ${new Date(summary.generatedAt).toLocaleTimeString()}`;
-  $("modeBadge").textContent = data.mode === "sample" ? "Sample mode" : "Live WATI";
+  $("modeBadge").textContent = modeLabel(data.mode);
   $("opsHeadline").textContent = headline(totals);
   $("opsBrief").textContent = brief(totals);
   $("metricUnassigned").textContent = totals.unassigned;
@@ -94,6 +94,13 @@ function render(data) {
   $("teamRows").innerHTML = teams.map(renderCompactRow).join("");
   $("agentRows").innerHTML = agents.map(renderCompactRow).join("");
   $("programRows").innerHTML = programs.map(renderProgramCard).join("");
+}
+
+function modeLabel(mode) {
+  if (mode === "sample") return "Sample mode";
+  if (mode === "supabase-sync") return "Supabase sync";
+  if (mode === "supabase-empty") return "Supabase ready";
+  return "Live WATI";
 }
 
 function headline(totals) {

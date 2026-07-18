@@ -1,6 +1,7 @@
 const { csv, number } = require("./env");
 const { WatiClient } = require("./wati-client");
 const { summarize } = require("./wati-metrics");
+const { isSupabaseConfigured, supabaseRequest } = require("./supabase-client");
 
 function metricConfig() {
   return {
@@ -21,6 +22,12 @@ function watiClient() {
 }
 
 async function getWatiSummary({ client = watiClient(), config = metricConfig() } = {}) {
+  const supabase = await getSupabaseSummary(config).catch((error) => ({
+    ok: false,
+    error: error.code || error.message
+  }));
+  if (supabase.ok && supabase.summary.totals.open > 0) return supabase;
+
   if (!client.isConfigured()) {
     return {
       ok: true,
@@ -60,6 +67,47 @@ async function getWatiSummary({ client = watiClient(), config = metricConfig() }
       summary: summarize(sampleConversations(), config)
     };
   }
+}
+
+async function getSupabaseSummary(config) {
+  if (!isSupabaseConfigured()) {
+    const error = new Error("Supabase is not configured.");
+    error.code = "SUPABASE_NOT_CONFIGURED";
+    throw error;
+  }
+
+  const rows = await supabaseRequest(
+    "/wati_conversations?select=id,ticket_id,wa_id,student_name,team_id,assigned_agent_id,program,status,tags,custom_attributes,first_seen_at,assigned_at,last_customer_message_at,last_agent_reply_at,session_expires_at,raw,updated_at&order=updated_at.desc&limit=500",
+    { headers: { Prefer: "" } }
+  );
+
+  return {
+    ok: true,
+    mode: rows.length ? "supabase-sync" : "supabase-empty",
+    source: "supabase",
+    summary: summarize(rows.map(mapSupabaseConversation), config),
+    syncedConversations: rows.length
+  };
+}
+
+function mapSupabaseConversation(row) {
+  return {
+    conversationId: row.id,
+    ticketId: row.ticket_id,
+    waId: row.wa_id,
+    senderName: row.student_name,
+    teamName: row.team_id || "Unmapped",
+    operatorName: row.assigned_agent_id,
+    program: row.program,
+    status: row.status || "open",
+    tags: row.tags || [],
+    customAttributes: row.custom_attributes || {},
+    created: row.first_seen_at || row.updated_at,
+    assignedAt: row.assigned_at,
+    lastCustomerMessageAt: row.last_customer_message_at,
+    lastAgentReplyAt: row.last_agent_reply_at,
+    raw: row.raw || row
+  };
 }
 
 function extractRecords(value) {
@@ -139,6 +187,7 @@ function sampleConversations() {
 module.exports = {
   extractRecords,
   getWatiSummary,
+  getSupabaseSummary,
   metricConfig,
   sampleConversations,
   watiClient
