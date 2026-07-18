@@ -100,10 +100,14 @@ function render(data) {
 function renderOperations(operations) {
   const admin = operations.admin || {};
   const access = operations.access || {};
+  const programs = operations.programs || [];
   const accountRows = compactAccounts([
-    { ...(admin || {}), key: "admin", type: "admin", name: "Admin Account" },
-    ...(operations.programs || []),
-    { ...(access || {}), key: "access", type: "access" }
+    makeAccount(access, "access", "access", "Access & Support"),
+    makeAccount(admin, "admin", "admin", "Admin Team"),
+    makeAccount(operations.bot || {}, "bot", "bot", "Bot"),
+    makeProgramAccount(programs, "css", "CSS Counseling Team"),
+    makeProgramAccount(programs, "mdcat", "MDCAT Team"),
+    makeProgramAccount(programs, "shahrukh", "Shahrukh Swati")
   ]);
   state.accounts = accountRows;
   if (!accountRows.some((item) => item.key === state.selectedAccountKey)) state.selectedAccountKey = accountRows[0]?.key || "admin";
@@ -114,42 +118,129 @@ function renderOperations(operations) {
   $("summaryExpiredToday").textContent = admin.expiredToday ?? 0;
   $("opsDataBadge").textContent = dataQualityLabel(operations);
 
+  $("teamOrbit").innerHTML = accountRows.map(renderTeamOrbit).join("");
   $("accountRows").innerHTML = accountRows.map(renderAccountLane).join("");
   renderDrilldown(accountRows.find((item) => item.key === state.selectedAccountKey) || accountRows[0]);
+}
+
+function makeAccount(source, key, type, name) {
+  return { ...(source || {}), key, type, name };
+}
+
+function makeProgramAccount(programs, key, fallbackName) {
+  const program = programs.find((item) => item.key === key || item.name?.toLowerCase().includes(key)) || {};
+  return {
+    ...program,
+    key,
+    type: "program",
+    name: program.name || fallbackName
+  };
+}
+
+function renderTeamOrbit(lane, index) {
+  const initials = lane.name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join("");
+  const isSelected = lane.key === state.selectedAccountKey;
+  return `
+    <button class="team-node ${isSelected ? "selected" : ""}" data-account-key="${escapeHtml(lane.key)}" type="button">
+      <span class="team-avatar">${escapeHtml(initials || String(index + 1))}</span>
+      <strong>${escapeHtml(lane.name)}</strong>
+      <small>${lane.assignedToMe || 0}</small>
+    </button>
+  `;
 }
 
 function renderAccountLane(lane) {
   const isSelected = lane.key === state.selectedAccountKey;
   const coverageText = lane.activeCounselorsKnown
     ? `${lane.activeCounselorAssigned} active | ${lane.inactiveCounselorAssigned} inactive`
-    : lane.type === "access" ? "issue distribution" : lane.type === "admin" ? "reverse expiry timing" : "active counselor list pending";
+    : lane.type === "access" ? "issue distribution" : lane.type === "admin" ? "reverse expiry timing" : lane.type === "bot" ? "bot handoff lane" : "active counselor list pending";
   const distribution = lane.type === "access"
     ? renderIssueRows(lane.issueBreakdown || [], lane.assignedToMe || 0)
     : lane.type === "admin"
       ? renderExpiryRows(lane.aboutToExpireRows || [])
-    : renderCounselorRows(lane.counselorBreakdown || []);
+      : lane.type === "bot"
+        ? renderBotRows(lane)
+        : renderCounselorRows(lane.counselorBreakdown || []);
+  const stats = accountStats(lane);
   return `
-    <button class="account-row ${lane.type === "access" ? "access-row" : ""} ${lane.type === "admin" ? "admin-row" : ""} ${isSelected ? "selected" : ""}" data-account-key="${escapeHtml(lane.key)}" type="button">
-      <div class="account-title">
-        <span>${escapeHtml(lane.name)}</span>
-        <strong>${lane.assignedToMe || 0}</strong>
-        <small>Assigned to me</small>
+    <button class="account-row flow-card ${lane.type}-row ${isSelected ? "selected" : ""}" data-account-key="${escapeHtml(lane.key)}" type="button">
+      <div class="flow-card-head">
+        <div>
+          <span>${escapeHtml(lane.name)}</span>
+          <strong>${stats.primary.value}</strong>
+          <small>${escapeHtml(stats.primary.label)}</small>
+        </div>
+        <i>${escapeHtml(stats.badge)}</i>
       </div>
-      <div class="account-metrics">
-        <div><b>${lane.type === "admin" ? lane.unassigned || 0 : lane.waiting || 0}</b><span>${lane.type === "admin" ? "Unassigned" : "Waiting"}</span></div>
-        <div><b>${lane.catered || 0}</b><span>Catered</span></div>
-        <div><b>${timeAgo(lane.lastAssignedAt)}</b><span>Last lead</span></div>
-        <div><b>${timeAgo(lane.firstAssignedAt)}</b><span>Oldest lead</span></div>
-        <div><b>${lane.expiring || lane.activeExpiring || 0}</b><span>Expiring</span></div>
-        <div><b>${lane.missingCounselorTags || 0}</b><span>Missing tags</span></div>
+      <div class="flow-stat-grid">
+        ${stats.items.map((item) => `<div><b>${item.value}</b><span>${escapeHtml(item.label)}</span></div>`).join("")}
       </div>
-      <div class="account-detail">
+      <div class="flow-window">
         <span>${escapeHtml(coverageText)}</span>
         ${renderLeadWindow(lane.lastAssignedLead, lane.firstAssignedLead)}
       </div>
-      <div class="account-distribution">${distribution}</div>
+      <div class="flow-distribution">${distribution}</div>
     </button>
   `;
+}
+
+function accountStats(lane) {
+  if (lane.type === "admin") {
+    return {
+      primary: { value: lane.assignedToMe || 0, label: "Assigned to me" },
+      badge: "Dispatch",
+      items: [
+        { value: lane.assignedToMe || 0, label: "Assigned to me" },
+        { value: lane.unassigned || 0, label: "Unassigned chats" },
+        { value: lane.activeChats || lane.open || 0, label: "Active chats" },
+        { value: timeAgo(lane.lastAssignedAt), label: "Last lead" },
+        { value: timeAgo(lane.firstAssignedAt), label: "Today first lead" },
+        { value: lane.expiredToday || 0, label: "Expired today" }
+      ]
+    };
+  }
+  if (lane.type === "bot") {
+    return {
+      primary: { value: lane.assignedToMe || 0, label: "Assigned to me" },
+      badge: "Automation",
+      items: [
+        { value: lane.assignedToMe || 0, label: "Assigned to me" },
+        { value: lane.waiting || 0, label: "Waiting" },
+        { value: lane.catered || 0, label: "Catered" },
+        { value: timeAgo(lane.lastAssignedAt), label: "Last handoff" }
+      ]
+    };
+  }
+  if (lane.type === "access") {
+    return {
+      primary: { value: lane.assignedToMe || 0, label: "Assigned to me" },
+      badge: "Access",
+      items: [
+        { value: lane.assignedToMe || 0, label: "Assigned to me" },
+        { value: lane.waiting || 0, label: "Waiting" },
+        { value: lane.catered || 0, label: "Resolved" },
+        { value: timeAgo(lane.lastAssignedAt), label: "Last access lead" },
+        { value: timeAgo(lane.firstAssignedAt), label: "First access lead" }
+      ]
+    };
+  }
+  return {
+    primary: { value: lane.assignedToMe || 0, label: "Assigned to me" },
+    badge: "Counseling",
+    items: [
+      { value: lane.assignedToMe || 0, label: "Assigned to me" },
+      { value: lane.waiting || 0, label: "Waiting" },
+      { value: lane.catered || 0, label: "Catered" },
+      { value: timeAgo(lane.lastAssignedAt), label: "Bottom last lead" },
+      { value: timeAgo(lane.firstAssignedAt), label: "Top first lead" },
+      { value: lane.missingCounselorTags || 0, label: "Missing counselor" }
+    ]
+  };
 }
 
 function compactAccounts(accounts) {
@@ -253,6 +344,15 @@ function renderCounselorRows(rows) {
       `;
     })
     .join("");
+}
+
+function renderBotRows(lane) {
+  return `
+    <div class="counselor-row">
+      <div><strong>Bot assigned queue</strong><span>automation-owned chats</span></div>
+      <b>${lane.assignedToMe || 0}</b>
+    </div>
+  `;
 }
 
 function renderIssueRows(rows, fallbackCount) {
@@ -398,6 +498,7 @@ document.addEventListener("click", (event) => {
   const accountRow = event.target.closest("[data-account-key]");
   if (!accountRow) return;
   state.selectedAccountKey = accountRow.dataset.accountKey;
+  $("teamOrbit").innerHTML = state.accounts.map(renderTeamOrbit).join("");
   $("accountRows").innerHTML = state.accounts.map(renderAccountLane).join("");
   renderDrilldown(state.accounts.find((item) => item.key === state.selectedAccountKey));
   $("drilldown").scrollIntoView({ behavior: "smooth", block: "start" });
