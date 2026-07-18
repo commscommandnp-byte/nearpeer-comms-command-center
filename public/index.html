@@ -78,36 +78,31 @@
           </div>
         </section>
 
-        <section class="metric-grid executive-strip" aria-label="WATI critical metrics">
-          <article class="metric danger">
-            <span>Unassigned queue</span>
-            <strong id="metricUnassignedMirror">-</strong>
-            <small>oldest <b id="metricOldestUnassigned">-</b></small>
+        <section class="metric-grid executive-strip" aria-label="Command summary">
+          <article class="metric">
+            <span>Total active chats</span>
+            <strong id="summaryTotalActive">-</strong>
+            <small>live WATI load</small>
           </article>
           <article class="metric danger">
-            <span>Admin held</span>
-            <strong id="metricAdminHeld">-</strong>
-            <small>move to owner</small>
+            <span>Admin unassigned</span>
+            <strong id="summaryAdminUnassigned">-</strong>
+            <small>needs dispatch</small>
+          </article>
+          <article class="metric danger">
+            <span>Assigned-to-me pending</span>
+            <strong id="summaryAssignedPending">-</strong>
+            <small>waiting reply</small>
           </article>
           <article class="metric warning">
-            <span>Reply delay</span>
-            <strong id="metricDelayedMirror">-</strong>
-            <small>over active SLA</small>
-          </article>
-          <article class="metric warning">
-            <span>Session expiry</span>
-            <strong id="metricExpiring">-</strong>
+            <span>Expiring soon</span>
+            <strong id="summaryExpiringSoon">-</strong>
             <small>next 120 minutes</small>
           </article>
-          <article class="metric">
-            <span>Oldest assigned</span>
-            <strong id="metricOldestAssigned">-</strong>
-            <small>last assigned <b id="metricLastAssigned">-</b></small>
-          </article>
-          <article class="metric">
-            <span>Load balance</span>
-            <strong id="metricAgents">-</strong>
-            <small>active owners</small>
+          <article class="metric warning">
+            <span>Expired today</span>
+            <strong id="summaryExpiredToday">-</strong>
+            <small>24h window ended</small>
           </article>
         </section>
 
@@ -120,25 +115,38 @@
             <span id="opsDataBadge">Real data</span>
           </div>
 
-          <div class="account-board">
-            <article class="account-row admin-row">
-              <div class="account-title">
-                <span>Admin Account</span>
-                <strong id="adminAssignedToMe">-</strong>
-                <small>Assigned to me</small>
-              </div>
-              <div class="account-metrics">
-                <div><b id="adminUnassigned">-</b><span>Unassigned</span></div>
-                <div><b id="adminPending">-</b><span>Waiting</span></div>
-                <div><b id="adminExpiringCount">-</b><span>Expiring</span></div>
-                <div><b id="adminExpiredToday">-</b><span>Expired today</span></div>
-              </div>
-              <div class="account-detail">
-                <span>Reverse expiry timing</span>
-                <div id="adminExpiryRows" class="compact-expiry-list"></div>
-              </div>
+          <div id="accountRows" class="account-rows"></div>
+        </section>
+
+        <section class="panel drilldown-panel" id="drilldown">
+          <div class="panel-head">
+            <div>
+              <p class="section-kicker">Drilldown Queue</p>
+              <h2 id="drilldownTitle">Select an account</h2>
+            </div>
+            <span id="drilldownBadge">Live detail</span>
+          </div>
+          <div class="drilldown-grid">
+            <article class="drill-card">
+              <h3>Counselor / Issue Distribution</h3>
+              <div id="drillDistribution" class="drill-stack"></div>
             </article>
-            <div id="accountRows" class="account-rows"></div>
+            <article class="drill-card">
+              <h3>Expiry Timer</h3>
+              <div id="drillExpiry" class="drill-stack"></div>
+            </article>
+            <article class="drill-card wide">
+              <h3>Risk Rows</h3>
+              <div id="drillRiskRows" class="drill-table"></div>
+            </article>
+            <article class="drill-card wide">
+              <h3>Tags Missing</h3>
+              <div id="drillMissingTags" class="drill-table"></div>
+            </article>
+            <article class="drill-card full">
+              <h3>Chat List</h3>
+              <div id="drillChatRows" class="drill-table"></div>
+            </article>
           </div>
         </section>
 

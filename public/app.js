@@ -1,5 +1,7 @@
 const state = {
-  refreshMs: 1000
+  refreshMs: 1000,
+  selectedAccountKey: "admin",
+  accounts: []
 };
 
 const $ = (id) => document.getElementById(id);
@@ -59,17 +61,10 @@ function render(data) {
   $("opsHeadline").textContent = headline(totals);
   $("opsBrief").textContent = brief(totals);
   $("metricUnassigned").textContent = totals.unassigned;
-  $("metricUnassignedMirror").textContent = totals.unassigned;
-  $("metricOldestUnassigned").textContent = minutes(totals.oldestUnassignedMinutes);
-  $("metricAdminHeld").textContent = totals.adminHeld;
   $("metricDelayed").textContent = totals.delayedReplies;
-  $("metricDelayedMirror").textContent = totals.delayedReplies;
-  $("metricExpiring").textContent = totals.aboutToExpire;
   $("metricCriticalExpiry").textContent = totals.criticalExpiry;
   $("metricOpen").textContent = totals.open;
-  $("metricOldestAssigned").textContent = minutes(totals.oldestAssignedMinutes);
-  $("metricLastAssigned").textContent = timeAgo(totals.lastAssignedAt);
-  $("metricAgents").textContent = agents.filter((item) => item.name !== "Unassigned").length;
+  $("summaryTotalActive").textContent = totals.open;
   $("actionCount").textContent = `${actions.length} ${actions.length === 1 ? "item" : "items"}`;
   $("holoCore").textContent = totals.open;
   renderHologram(totals);
@@ -105,47 +100,113 @@ function render(data) {
 function renderOperations(operations) {
   const admin = operations.admin || {};
   const access = operations.access || {};
-  const accountRows = [
+  const accountRows = compactAccounts([
+    { ...(admin || {}), key: "admin", type: "admin", name: "Admin Account" },
     ...(operations.programs || []),
     { ...(access || {}), key: "access", type: "access" }
-  ];
+  ]);
+  state.accounts = accountRows;
+  if (!accountRows.some((item) => item.key === state.selectedAccountKey)) state.selectedAccountKey = accountRows[0]?.key || "admin";
+
+  $("summaryAdminUnassigned").textContent = admin.unassigned ?? 0;
+  $("summaryAssignedPending").textContent = accountRows.reduce((total, item) => total + (item.waiting || item.pendingDispatch || 0), 0);
+  $("summaryExpiringSoon").textContent = accountRows.reduce((total, item) => total + (item.expiring || item.activeExpiring || 0), 0);
+  $("summaryExpiredToday").textContent = admin.expiredToday ?? 0;
   $("opsDataBadge").textContent = operations.activeCounselorsConfigured ? "Active counselors set" : "Active list pending";
-  $("adminAssignedToMe").textContent = admin.assignedToMe ?? 0;
-  $("adminUnassigned").textContent = admin.unassigned ?? 0;
-  $("adminPending").textContent = admin.pendingDispatch ?? 0;
-  $("adminExpiringCount").textContent = admin.activeExpiring ?? 0;
-  $("adminExpiredToday").textContent = admin.expiredToday ?? 0;
-  $("adminExpiryRows").innerHTML = renderExpiryRows(admin.aboutToExpireRows || []);
 
   $("accountRows").innerHTML = accountRows.map(renderAccountLane).join("");
+  renderDrilldown(accountRows.find((item) => item.key === state.selectedAccountKey) || accountRows[0]);
 }
 
 function renderAccountLane(lane) {
+  const isSelected = lane.key === state.selectedAccountKey;
   const coverageText = lane.activeCounselorsKnown
     ? `${lane.activeCounselorAssigned} active | ${lane.inactiveCounselorAssigned} inactive`
-    : lane.type === "access" ? "issue distribution" : "active counselor list pending";
+    : lane.type === "access" ? "issue distribution" : lane.type === "admin" ? "reverse expiry timing" : "active counselor list pending";
   const distribution = lane.type === "access"
     ? renderIssueRows(lane.issueBreakdown || [], lane.assignedToMe || 0)
+    : lane.type === "admin"
+      ? renderExpiryRows(lane.aboutToExpireRows || [])
     : renderCounselorRows(lane.counselorBreakdown || []);
   return `
-    <article class="account-row ${lane.type === "access" ? "access-row" : ""}">
+    <button class="account-row ${lane.type === "access" ? "access-row" : ""} ${lane.type === "admin" ? "admin-row" : ""} ${isSelected ? "selected" : ""}" data-account-key="${escapeHtml(lane.key)}" type="button">
       <div class="account-title">
         <span>${escapeHtml(lane.name)}</span>
         <strong>${lane.assignedToMe || 0}</strong>
         <small>Assigned to me</small>
       </div>
       <div class="account-metrics">
-        <div><b>${lane.waiting || 0}</b><span>Waiting</span></div>
+        <div><b>${lane.type === "admin" ? lane.unassigned || 0 : lane.waiting || 0}</b><span>${lane.type === "admin" ? "Unassigned" : "Waiting"}</span></div>
         <div><b>${lane.catered || 0}</b><span>Catered</span></div>
         <div><b>${timeAgo(lane.lastAssignedAt)}</b><span>Last lead</span></div>
         <div><b>${timeAgo(lane.firstAssignedAt)}</b><span>Oldest lead</span></div>
+        <div><b>${lane.expiring || lane.activeExpiring || 0}</b><span>Expiring</span></div>
+        <div><b>${lane.missingCounselorTags || 0}</b><span>Missing tags</span></div>
       </div>
       <div class="account-detail">
         <span>${escapeHtml(coverageText)}</span>
         ${renderLeadWindow(lane.lastAssignedLead, lane.firstAssignedLead)}
       </div>
       <div class="account-distribution">${distribution}</div>
-    </article>
+    </button>
+  `;
+}
+
+function compactAccounts(accounts) {
+  return accounts.map((item) => ({
+    assignedToMe: 0,
+    waiting: 0,
+    catered: 0,
+    expiring: 0,
+    missingCounselorTags: 0,
+    allRows: [],
+    riskRows: [],
+    missingTagRows: [],
+    aboutToExpireRows: [],
+    ...item
+  }));
+}
+
+function renderDrilldown(account) {
+  if (!account) return;
+  $("drilldownTitle").textContent = account.name;
+  $("drilldownBadge").textContent = `${account.assignedToMe || 0} assigned`;
+  $("drillDistribution").innerHTML = account.type === "access"
+    ? renderIssueRows(account.issueBreakdown || [], account.assignedToMe || 0)
+    : account.type === "admin"
+      ? renderAdminDistribution(account)
+      : renderCounselorRows(account.counselorBreakdown || []);
+  $("drillExpiry").innerHTML = renderExpiryRows(account.aboutToExpireRows || []);
+  $("drillRiskRows").innerHTML = renderDrillRows(account.riskRows || [], "No risk rows for this account.");
+  $("drillMissingTags").innerHTML = renderDrillRows(account.missingTagRows || [], "No missing counselor tags in synced rows.");
+  $("drillChatRows").innerHTML = renderDrillRows(account.allRows || [], "No synced chats for this account.");
+}
+
+function renderAdminDistribution(account) {
+  return `
+    <div class="counselor-row"><div><strong>Unassigned chats</strong><span>need dispatch</span></div><b>${account.unassigned || 0}</b></div>
+    <div class="counselor-row"><div><strong>Waiting reply</strong><span>student replied last</span></div><b>${account.pendingDispatch || 0}</b></div>
+    <div class="counselor-row"><div><strong>Expired today</strong><span>24h window ended</span></div><b>${account.expiredToday || 0}</b></div>
+  `;
+}
+
+function renderDrillRows(rows, emptyText) {
+  if (!rows.length) return `<div class="lane-empty">${escapeHtml(emptyText)}</div>`;
+  return `
+    <table class="mini-table">
+      <thead><tr><th>Chat</th><th>Program</th><th>Counselor</th><th>Waiting</th><th>Expiry</th></tr></thead>
+      <tbody>
+        ${rows.map((row) => `
+          <tr>
+            <td><strong>${escapeHtml(row.studentName)}</strong><small>${escapeHtml(row.phone || "")}</small></td>
+            <td>${escapeHtml(row.program || "-")}</td>
+            <td>${escapeHtml(row.missingCounselorTag ? "Tag missing" : row.counselor || "-")}</td>
+            <td>${minutes(row.waitingMinutes)}</td>
+            <td>${minutes(row.expiryRemainingMinutes)}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
   `;
 }
 
@@ -325,5 +386,14 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
+
+document.addEventListener("click", (event) => {
+  const accountRow = event.target.closest("[data-account-key]");
+  if (!accountRow) return;
+  state.selectedAccountKey = accountRow.dataset.accountKey;
+  $("accountRows").innerHTML = state.accounts.map(renderAccountLane).join("");
+  renderDrilldown(state.accounts.find((item) => item.key === state.selectedAccountKey));
+  $("drilldown").scrollIntoView({ behavior: "smooth", block: "start" });
+});
 
 load();

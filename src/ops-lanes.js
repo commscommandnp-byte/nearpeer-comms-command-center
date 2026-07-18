@@ -65,15 +65,28 @@ function buildAdminLane(items, config) {
 
   return {
     name: "Admin Team",
+    key: "admin",
+    type: "admin",
     assignedToMe: adminItems.length,
     unassigned: unassigned.length,
+    waiting: pendingDispatch.length,
+    catered: adminItems.length - pendingDispatch.length,
     pendingDispatch: pendingDispatch.length,
     activeExpiring: activeExpiring.length,
+    expiring: activeExpiring.length,
     expiredToday: expiredTodayItems.length,
+    missingCounselorTags: missingCounselor(adminItems).length,
     firstPendingAt: earliest(pendingDispatch.map((item) => item.lastCustomerMessageAt || item.createdAt)),
     lastPendingAt: latest(pendingDispatch.map((item) => item.lastCustomerMessageAt || item.createdAt)),
+    firstAssignedAt: earliest(adminItems.map((item) => item.assignedAt || item.createdAt || item.lastCustomerMessageAt)),
+    lastAssignedAt: latest(adminItems.map((item) => item.assignedAt || item.createdAt || item.lastCustomerMessageAt)),
+    lastAssignedLead: latestAssignedRow(adminItems),
+    firstAssignedLead: earliestAssignedRow(adminItems),
     oldestWaitingMinutes: max(pendingDispatch.map((item) => item.waitingMinutes)),
     rows: pendingDispatch.slice(0, 8).map(toLaneRow),
+    allRows: adminItems.map(toLaneRow).slice(0, 30),
+    riskRows: riskRows(adminItems).slice(0, 12),
+    missingTagRows: missingCounselor(adminItems).map(toLaneRow).slice(0, 12),
     aboutToExpireRows: activeExpiring
       .map(toLaneRow)
       .sort((a, b) => (a.expiryRemainingMinutes ?? Infinity) - (b.expiryRemainingMinutes ?? Infinity))
@@ -106,10 +119,16 @@ function buildTeamAccountLane(items, lane, config) {
     activeCounselorAssigned: assignedToActive.length,
     inactiveCounselorAssigned: assignedToInactive.length,
     activeCounselorsKnown: config.activeCounselors.size > 0,
+    expiring: laneItems.filter((item) => isExpiring(item)).length,
+    missingCounselorTags: missingCounselor(laneItems).length,
     lastAssignedLead: assignedRows[0] || null,
     firstAssignedLead: assignedRows[assignedRows.length - 1] || null,
     counselorBreakdown: counselorBreakdown(laneItems, config),
-    rows: waiting.slice(0, 8).map(toLaneRow)
+    rows: waiting.slice(0, 8).map(toLaneRow),
+    allRows: laneItems.map(toLaneRow).slice(0, 30),
+    riskRows: riskRows(laneItems).slice(0, 12),
+    missingTagRows: missingCounselor(laneItems).map(toLaneRow).slice(0, 12),
+    aboutToExpireRows: laneItems.filter((item) => isExpiring(item)).map(toLaneRow).slice(0, 12)
   };
 }
 
@@ -134,8 +153,14 @@ function buildAccessLane(items, config) {
     lastAssignedAt: latest(laneItems.map((item) => item.assignedAt || item.createdAt || item.lastCustomerMessageAt)),
     lastAssignedLead: latestAssignedRow(laneItems),
     firstAssignedLead: earliestAssignedRow(laneItems),
+    expiring: laneItems.filter((item) => isExpiring(item)).length,
+    missingCounselorTags: missingCounselor(laneItems).length,
     issueBreakdown: issueBreakdown(laneItems),
-    rows: waiting.slice(0, 8).map(toLaneRow)
+    rows: waiting.slice(0, 8).map(toLaneRow),
+    allRows: laneItems.map(toLaneRow).slice(0, 30),
+    riskRows: riskRows(laneItems).slice(0, 12),
+    missingTagRows: missingCounselor(laneItems).map(toLaneRow).slice(0, 12),
+    aboutToExpireRows: laneItems.filter((item) => isExpiring(item)).map(toLaneRow).slice(0, 12)
   };
 }
 
@@ -151,7 +176,9 @@ function toLaneRow(item) {
     waitingMinutes: item.waitingMinutes,
     assignedAt: item.assignedAt || item.createdAt || item.lastCustomerMessageAt,
     lastCustomerMessageAt: item.lastCustomerMessageAt,
-    expiryRemainingMinutes
+    expiryRemainingMinutes,
+    hasPendingCustomerReply: item.hasPendingCustomerReply,
+    missingCounselorTag: isMissingCounselor(item)
   };
 }
 
@@ -209,6 +236,22 @@ function isUnassigned(item) {
   const owner = normalizeName(item.assignedTo);
   const email = normalizeName(item.assignedEmail);
   return (!owner && !email) || owner === "unassigned";
+}
+
+function riskRows(items) {
+  return items
+    .filter((item) => item.hasPendingCustomerReply || isExpiring(item))
+    .map(toLaneRow)
+    .sort((a, b) => (a.expiryRemainingMinutes ?? Infinity) - (b.expiryRemainingMinutes ?? Infinity) || (b.waitingMinutes || 0) - (a.waitingMinutes || 0));
+}
+
+function missingCounselor(items) {
+  return items.filter(isMissingCounselor);
+}
+
+function isMissingCounselor(item) {
+  const counselor = normalizeName(item.counselor);
+  return !counselor || counselor === "-" || counselor === "unassigned" || counselor === normalizeName(item.assignedTo);
 }
 
 function isExpiring(item) {

@@ -391,7 +391,7 @@ h2 {
 
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 12px;
 }
@@ -613,7 +613,8 @@ td small {
 
 .account-row {
   display: grid;
-  grid-template-columns: minmax(150px, 0.48fr) minmax(380px, 1.08fr) minmax(260px, 0.72fr) minmax(230px, 0.62fr);
+  width: 100%;
+  grid-template-columns: minmax(150px, 0.42fr) minmax(460px, 1.12fr) minmax(260px, 0.7fr) minmax(230px, 0.58fr);
   gap: 10px;
   align-items: stretch;
   min-width: 0;
@@ -623,6 +624,23 @@ td small {
   background:
     linear-gradient(120deg, rgba(38, 215, 208, 0.08), transparent 42%),
     rgba(10, 20, 22, 0.72);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition: border-color 180ms ease, background 180ms ease, transform 180ms ease;
+}
+
+.account-row:hover,
+.account-row.selected {
+  border-color: rgba(85, 242, 155, 0.34);
+  background:
+    linear-gradient(120deg, rgba(85, 242, 155, 0.11), transparent 42%),
+    rgba(12, 28, 28, 0.82);
+}
+
+.account-row:hover {
+  transform: translateY(-1px);
 }
 
 .admin-row {
@@ -665,7 +683,7 @@ td small {
 
 .account-metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -690,7 +708,7 @@ td small {
 }
 
 .account-metrics b {
-  font-size: 24px;
+  font-size: 22px;
   line-height: 1;
 }
 
@@ -712,6 +730,58 @@ td small {
   max-height: 154px;
   overflow: auto;
   padding-right: 2px;
+}
+
+.drilldown-panel {
+  margin-bottom: 16px;
+}
+
+.drilldown-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.8fr) minmax(240px, 0.8fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.drill-card {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(162, 255, 209, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.drill-card.wide {
+  grid-column: span 2;
+}
+
+.drill-card.full {
+  grid-column: 1 / -1;
+}
+
+.drill-card h3 {
+  margin: 0 0 10px;
+  color: #dff8ec;
+  font-size: 13px;
+}
+
+.drill-stack {
+  display: grid;
+  gap: 8px;
+}
+
+.drill-table {
+  max-height: 300px;
+  overflow: auto;
+}
+
+.mini-table {
+  min-width: 620px;
+  font-size: 12px;
+}
+
+.mini-table th,
+.mini-table td {
+  padding: 9px 8px;
 }
 
 .compact-expiry-list {
@@ -1045,9 +1115,17 @@ td small {
     grid-template-columns: 160px 1fr;
   }
 
+  .account-metrics {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
   .account-detail,
   .account-distribution {
     grid-column: 1 / -1;
+  }
+
+  .drilldown-grid {
+    grid-template-columns: 1fr 1fr;
   }
 
   .holo-stage {
@@ -1120,6 +1198,12 @@ td small {
 
   .account-metrics {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .drilldown-grid,
+  .drill-card.wide {
+    grid-template-columns: 1fr;
+    grid-column: 1 / -1;
   }
 
   .shift-grid {
