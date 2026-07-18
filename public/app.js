@@ -102,16 +102,18 @@ function renderOperations(operations) {
   const admin = operations.admin || {};
   const access = operations.access || {};
   $("opsDataBadge").textContent = operations.activeCounselorsConfigured ? "Active counselors set" : "Active list pending";
+  $("adminAssignedToMe").textContent = admin.assignedToMe ?? 0;
+  $("adminUnassigned").textContent = admin.unassigned ?? 0;
   $("adminPending").textContent = admin.pendingDispatch ?? 0;
-  $("adminHeldCount").textContent = admin.assignedToMe ?? 0;
   $("adminExpiringCount").textContent = admin.activeExpiring ?? 0;
-  $("adminOldestPending").textContent = minutes(admin.oldestWaitingMinutes);
-  $("adminLaneRows").innerHTML = renderLaneMiniRows(admin.rows || []);
+  $("adminExpiredToday").textContent = admin.expiredToday ?? 0;
+  $("adminExpiryRows").innerHTML = renderExpiryRows(admin.aboutToExpireRows || []);
 
   $("accessWaiting").textContent = access.waiting ?? 0;
   $("accessAssigned").textContent = access.assignedToMe ?? 0;
   $("accessCatered").textContent = access.catered ?? 0;
   $("accessLastAssigned").textContent = timeAgo(access.lastAssignedAt);
+  $("accessLeadWindow").innerHTML = renderLeadWindow(access.lastAssignedLead, access.firstAssignedLead);
   $("accessIssueRows").innerHTML = (access.issueBreakdown || [])
     .slice(0, 5)
     .map((item) => `<span>${escapeHtml(item.name)} <b>${item.count}</b></span>`)
@@ -129,20 +131,72 @@ function renderProgramLane(lane) {
       <div class="ops-card-head">
         <div>
           <span>${escapeHtml(lane.name)}</span>
-          <strong>${lane.waiting}</strong>
+          <strong>${lane.assignedToMe}</strong>
         </div>
-        <small>Assigned to me waiting</small>
+        <small>Assigned to me chats</small>
       </div>
       <div class="ops-stats">
-        <div><b>${lane.assignedToMe}</b><span>Assigned to me</span></div>
+        <div><b>${lane.waiting}</b><span>waiting</span></div>
         <div><b>${lane.catered}</b><span>replied/catered</span></div>
         <div><b>${timeAgo(lane.lastAssignedAt)}</b><span>last lead</span></div>
         <div><b>${timeAgo(lane.firstAssignedAt)}</b><span>first lead</span></div>
       </div>
+      ${renderLeadWindow(lane.lastAssignedLead, lane.firstAssignedLead)}
       <p class="coverage-line">${escapeHtml(coverageText)}</p>
-      <div class="lane-mini-list">${renderLaneMiniRows(lane.rows || [])}</div>
+      <div class="counselor-list">${renderCounselorRows(lane.counselorBreakdown || [])}</div>
     </article>
   `;
+}
+
+function renderLeadWindow(lastLead, firstLead) {
+  return `
+    <div class="lead-window">
+      ${renderLeadPoint("Last assigned chat", lastLead)}
+      ${renderLeadPoint("Oldest assigned chat", firstLead)}
+    </div>
+  `;
+}
+
+function renderLeadPoint(label, lead) {
+  if (!lead) {
+    return `<div><span>${escapeHtml(label)}</span><strong>-</strong><small>No synced lead.</small></div>`;
+  }
+  return `
+    <div>
+      <span>${escapeHtml(label)}</span>
+      <strong>${timeAgo(lead.assignedAt)}</strong>
+      <small>${escapeHtml(lead.studentName)} ${lead.phone ? `| ${escapeHtml(lead.phone)}` : ""}</small>
+    </div>
+  `;
+}
+
+function renderCounselorRows(rows) {
+  if (!rows.length) return `<div class="lane-empty">No counselor leads synced.</div>`;
+  return rows
+    .map((row) => {
+      const activeLabel = row.active === null ? "" : row.active ? "active" : "inactive";
+      return `
+        <div class="counselor-row">
+          <div><strong>${escapeHtml(row.name)}</strong><span>${row.waiting} waiting ${activeLabel ? `| ${activeLabel}` : ""}</span></div>
+          <b>${row.count}</b>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function renderExpiryRows(rows) {
+  if (!rows.length) return `<div class="lane-empty">No active chats inside the 120 minute expiry window.</div>`;
+  return rows
+    .map(
+      (row) => `
+        <div class="lane-mini-row expiry-row">
+          <div><strong>${escapeHtml(row.studentName)}</strong><span>${escapeHtml(row.phone || "")}</span></div>
+          <div><b>${minutes(row.expiryRemainingMinutes)}</b><span>remaining</span></div>
+        </div>
+      `
+    )
+    .join("");
 }
 
 function renderLaneMiniRows(rows) {

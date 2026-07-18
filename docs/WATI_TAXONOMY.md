@@ -155,28 +155,30 @@ The command center treats WATI work as the team-account "Assigned to me" lanes:
 - CSS Counseling Team
 - MDCAT Team
 - CA Team
+- Shahrukh Swati
 - Access & Support
 
 Admin Team answers:
 
 - How many chats are in the Admin Team "Assigned to me" view?
-- How many Admin Team chats are waiting and need dispatch?
-- How many active Admin Team chats are about to expire?
-- What is the oldest pending Admin wait?
+- How many Admin Team chats are unassigned?
+- How many Admin Team chats are about to expire with reverse remaining time?
+- How many Admin Team chats expired today?
 
 Program lanes answer:
 
 - How many leads are in that team account's "Assigned to me" view?
-- How many are waiting for reply?
-- How many have been catered/replied?
-- What was the first and last lead time in that lane?
-- Are assigned leads mapped to active counselors?
+- Which chat was assigned most recently?
+- Which synced chat is the oldest assigned lead in that lane?
+- How many leads are assigned to each counselor name?
+- How many counselor assignments map to active counselors?
 
 Access & Support answers:
 
 - How many leads are in the Access & Support "Assigned to me" view?
-- How many are waiting?
-- How many have been catered?
+- Which chat was assigned most recently?
+- Which synced chat is the oldest assigned lead?
+- Total assigned leads count, waiting count, and catered count.
 - Which issue categories are present, such as Access, Login, Technical, Payment, or Refund?
 
 Active counselor status is controlled by the `WATI_ACTIVE_COUNSELORS` environment variable. Add a comma-separated list of active counselor names exactly as they appear in WATI tags.
@@ -187,6 +189,7 @@ Team account names can be tuned with:
 - `WATI_CSS_ACCOUNT_NAMES`
 - `WATI_MDCAT_ACCOUNT_NAMES`
 - `WATI_CA_ACCOUNT_NAMES`
+- `WATI_SHAHRUKH_ACCOUNT_NAMES`
 - `WATI_ACCESS_ACCOUNT_NAMES`
 
 Temporary sync derives the "Assigned to me" lanes from WATI contact/team/tag data. Webhook forwarding will make this exact to WATI's live UI filter.

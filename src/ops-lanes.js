@@ -22,6 +22,13 @@ const TEAM_ACCOUNT_LANES = [
     programs: ["CA"],
     accountNamesEnv: "WATI_CA_ACCOUNT_NAMES",
     defaultAccountNames: ["CA Team", "CA"]
+  },
+  {
+    key: "shahrukh",
+    name: "Shahrukh Swati",
+    programs: [],
+    accountNamesEnv: "WATI_SHAHRUKH_ACCOUNT_NAMES",
+    defaultAccountNames: ["Shahrukh Swati"]
   }
 ];
 
@@ -51,18 +58,26 @@ function buildOpsLanes(conversations, metricConfig = {}, config = opsConfig()) {
 
 function buildAdminLane(items, config) {
   const adminItems = items.filter((item) => isAdminItem(item, config));
+  const unassigned = adminItems.filter((item) => isUnassigned(item));
   const pendingDispatch = adminItems.filter((item) => item.hasPendingCustomerReply);
   const activeExpiring = adminItems.filter((item) => isExpiring(item));
+  const expiredTodayItems = adminItems.filter((item) => expiredToday(item));
 
   return {
     name: "Admin Team",
     assignedToMe: adminItems.length,
+    unassigned: unassigned.length,
     pendingDispatch: pendingDispatch.length,
     activeExpiring: activeExpiring.length,
+    expiredToday: expiredTodayItems.length,
     firstPendingAt: earliest(pendingDispatch.map((item) => item.lastCustomerMessageAt || item.createdAt)),
     lastPendingAt: latest(pendingDispatch.map((item) => item.lastCustomerMessageAt || item.createdAt)),
     oldestWaitingMinutes: max(pendingDispatch.map((item) => item.waitingMinutes)),
-    rows: pendingDispatch.slice(0, 8).map(toLaneRow)
+    rows: pendingDispatch.slice(0, 8).map(toLaneRow),
+    aboutToExpireRows: activeExpiring
+      .map(toLaneRow)
+      .sort((a, b) => (a.expiryRemainingMinutes ?? Infinity) - (b.expiryRemainingMinutes ?? Infinity))
+      .slice(0, 6)
   };
 }
 
@@ -75,6 +90,9 @@ function buildTeamAccountLane(items, lane, config) {
   const assignedToInactive = config.activeCounselors.size
     ? laneItems.filter((item) => item.counselor && !isActiveCounselor(item.counselor, config))
     : [];
+  const assignedRows = laneItems
+    .map(toLaneRow)
+    .sort((a, b) => new Date(b.assignedAt || 0).getTime() - new Date(a.assignedAt || 0).getTime());
 
   return {
     key: lane.key,
@@ -88,6 +106,9 @@ function buildTeamAccountLane(items, lane, config) {
     activeCounselorAssigned: assignedToActive.length,
     inactiveCounselorAssigned: assignedToInactive.length,
     activeCounselorsKnown: config.activeCounselors.size > 0,
+    lastAssignedLead: assignedRows[0] || null,
+    firstAssignedLead: assignedRows[assignedRows.length - 1] || null,
+    counselorBreakdown: counselorBreakdown(laneItems, config),
     rows: waiting.slice(0, 8).map(toLaneRow)
   };
 }
@@ -111,12 +132,15 @@ function buildAccessLane(items, config) {
     catered: catered.length,
     firstAssignedAt: earliest(laneItems.map((item) => item.assignedAt || item.createdAt || item.lastCustomerMessageAt)),
     lastAssignedAt: latest(laneItems.map((item) => item.assignedAt || item.createdAt || item.lastCustomerMessageAt)),
+    lastAssignedLead: latestAssignedRow(laneItems),
+    firstAssignedLead: earliestAssignedRow(laneItems),
     issueBreakdown: issueBreakdown(laneItems),
     rows: waiting.slice(0, 8).map(toLaneRow)
   };
 }
 
 function toLaneRow(item) {
+  const expiryRemainingMinutes = item.sessionAgeMinutes === null || item.sessionAgeMinutes === undefined ? null : 24 * 60 - item.sessionAgeMinutes;
   return {
     studentName: item.studentName,
     phone: item.phone,
@@ -125,8 +149,29 @@ function toLaneRow(item) {
     owner: item.assignedTo || "Unassigned",
     counselor: item.counselor || "-",
     waitingMinutes: item.waitingMinutes,
-    lastCustomerMessageAt: item.lastCustomerMessageAt
+    assignedAt: item.assignedAt || item.createdAt || item.lastCustomerMessageAt,
+    lastCustomerMessageAt: item.lastCustomerMessageAt,
+    expiryRemainingMinutes
   };
+}
+
+function counselorBreakdown(items, config) {
+  const map = new Map();
+  for (const item of items) {
+    const name = item.counselor || item.assignedTo || "No counselor";
+    if (!map.has(name)) {
+      map.set(name, {
+        name,
+        count: 0,
+        waiting: 0,
+        active: config.activeCounselors.size ? isActiveCounselor(name, config) : null
+      });
+    }
+    const row = map.get(name);
+    row.count += 1;
+    if (item.hasPendingCustomerReply) row.waiting += 1;
+  }
+  return Array.from(map.values()).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
 
 function issueBreakdown(items) {
@@ -155,15 +200,40 @@ function isTeamAccountItem(item, lane, accountNames) {
   const counselor = normalizeName(item.counselor);
   const tags = normalizeTagsForMatch(item.tags);
   return (
-    lane.programs.includes(program) ||
+    (lane.programs.length > 0 && lane.programs.includes(program)) ||
     accountNames.some((name) => matchesName(team, name) || matchesName(owner, name) || matchesName(counselor, name) || matchesName(tags, name))
   );
+}
+
+function isUnassigned(item) {
+  const owner = normalizeName(item.assignedTo);
+  const email = normalizeName(item.assignedEmail);
+  return (!owner && !email) || owner === "unassigned";
 }
 
 function isExpiring(item) {
   if (item.sessionAgeMinutes === null || item.sessionAgeMinutes === undefined) return false;
   const remaining = 24 * 60 - item.sessionAgeMinutes;
   return remaining > 0 && remaining <= 120;
+}
+
+function expiredToday(item, now = new Date()) {
+  if (item.sessionAgeMinutes === null || item.sessionAgeMinutes === undefined) return false;
+  if (item.sessionAgeMinutes < 24 * 60) return false;
+  const lastCustomer = item.lastCustomerMessageAt ? new Date(item.lastCustomerMessageAt) : null;
+  if (!lastCustomer || Number.isNaN(lastCustomer.getTime())) return false;
+  const expiryDate = new Date(lastCustomer.getTime() + 24 * 60 * 60000);
+  return expiryDate.toDateString() === now.toDateString();
+}
+
+function latestAssignedRow(items) {
+  const rows = items.map(toLaneRow).filter((item) => item.assignedAt);
+  return rows.sort((a, b) => new Date(b.assignedAt).getTime() - new Date(a.assignedAt).getTime())[0] || null;
+}
+
+function earliestAssignedRow(items) {
+  const rows = items.map(toLaneRow).filter((item) => item.assignedAt);
+  return rows.sort((a, b) => new Date(a.assignedAt).getTime() - new Date(b.assignedAt).getTime())[0] || null;
 }
 
 function isActiveCounselor(name, config) {

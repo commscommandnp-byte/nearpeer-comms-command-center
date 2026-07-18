@@ -608,8 +608,12 @@ td small {
   margin-bottom: 14px;
 }
 
+.ops-grid-single {
+  grid-template-columns: 1fr;
+}
+
 .program-lane-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .ops-card,
@@ -669,6 +673,10 @@ td small {
   grid-template-columns: repeat(2, 1fr);
 }
 
+.admin-specific-stats {
+  grid-template-columns: repeat(4, 1fr);
+}
+
 .ops-stats div {
   min-height: 70px;
   padding: 10px;
@@ -724,10 +732,77 @@ td small {
   text-align: right;
 }
 
+.lane-subhead {
+  margin: 4px 0 8px;
+  color: var(--teal);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .lane-empty {
   padding: 12px;
   border: 1px dashed rgba(162, 255, 209, 0.16);
   border-radius: 12px;
+}
+
+.lead-window,
+.counselor-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.lead-window {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.lead-window div,
+.counselor-row {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(162, 255, 209, 0.11);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.lead-window span,
+.lead-window strong,
+.lead-window small,
+.counselor-row strong,
+.counselor-row span,
+.counselor-row b {
+  display: block;
+}
+
+.lead-window span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.lead-window strong {
+  margin: 4px 0;
+  font-size: 20px;
+}
+
+.lead-window small,
+.counselor-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.counselor-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.counselor-row b {
+  color: var(--blue);
+  font-size: 22px;
 }
 
 .issue-pills {
