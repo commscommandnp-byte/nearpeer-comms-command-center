@@ -14,7 +14,11 @@ function minutes(value) {
 
 function timeAgo(value) {
   if (!value) return "-";
-  return minutes(Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 60000)));
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  const diff = Math.max(0, Math.round((Date.now() - date.getTime()) / 60000));
+  if (diff > 7 * 24 * 60) return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return minutes(diff);
 }
 
 function riskClass(risk) {
@@ -101,6 +105,10 @@ function render(data) {
 function renderOperations(operations) {
   const admin = operations.admin || {};
   const access = operations.access || {};
+  const accountRows = [
+    ...(operations.programs || []),
+    { ...(access || {}), key: "access", type: "access" }
+  ];
   $("opsDataBadge").textContent = operations.activeCounselorsConfigured ? "Active counselors set" : "Active list pending";
   $("adminAssignedToMe").textContent = admin.assignedToMe ?? 0;
   $("adminUnassigned").textContent = admin.unassigned ?? 0;
@@ -109,41 +117,34 @@ function renderOperations(operations) {
   $("adminExpiredToday").textContent = admin.expiredToday ?? 0;
   $("adminExpiryRows").innerHTML = renderExpiryRows(admin.aboutToExpireRows || []);
 
-  $("accessWaiting").textContent = access.waiting ?? 0;
-  $("accessAssigned").textContent = access.assignedToMe ?? 0;
-  $("accessCatered").textContent = access.catered ?? 0;
-  $("accessLastAssigned").textContent = timeAgo(access.lastAssignedAt);
-  $("accessLeadWindow").innerHTML = renderLeadWindow(access.lastAssignedLead, access.firstAssignedLead);
-  $("accessIssueRows").innerHTML = (access.issueBreakdown || [])
-    .slice(0, 5)
-    .map((item) => `<span>${escapeHtml(item.name)} <b>${item.count}</b></span>`)
-    .join("") || `<span>General <b>${access.assignedToMe || 0}</b></span>`;
-
-  $("programLaneRows").innerHTML = (operations.programs || []).map(renderProgramLane).join("");
+  $("accountRows").innerHTML = accountRows.map(renderAccountLane).join("");
 }
 
-function renderProgramLane(lane) {
+function renderAccountLane(lane) {
   const coverageText = lane.activeCounselorsKnown
     ? `${lane.activeCounselorAssigned} active | ${lane.inactiveCounselorAssigned} inactive`
-    : "active counselor list pending";
+    : lane.type === "access" ? "issue distribution" : "active counselor list pending";
+  const distribution = lane.type === "access"
+    ? renderIssueRows(lane.issueBreakdown || [], lane.assignedToMe || 0)
+    : renderCounselorRows(lane.counselorBreakdown || []);
   return `
-    <article class="program-lane-card">
-      <div class="ops-card-head">
-        <div>
-          <span>${escapeHtml(lane.name)}</span>
-          <strong>${lane.assignedToMe}</strong>
-        </div>
-        <small>Assigned to me chats</small>
+    <article class="account-row ${lane.type === "access" ? "access-row" : ""}">
+      <div class="account-title">
+        <span>${escapeHtml(lane.name)}</span>
+        <strong>${lane.assignedToMe || 0}</strong>
+        <small>Assigned to me</small>
       </div>
-      <div class="ops-stats">
-        <div><b>${lane.waiting}</b><span>waiting</span></div>
-        <div><b>${lane.catered}</b><span>replied/catered</span></div>
-        <div><b>${timeAgo(lane.lastAssignedAt)}</b><span>last lead</span></div>
-        <div><b>${timeAgo(lane.firstAssignedAt)}</b><span>first lead</span></div>
+      <div class="account-metrics">
+        <div><b>${lane.waiting || 0}</b><span>Waiting</span></div>
+        <div><b>${lane.catered || 0}</b><span>Catered</span></div>
+        <div><b>${timeAgo(lane.lastAssignedAt)}</b><span>Last lead</span></div>
+        <div><b>${timeAgo(lane.firstAssignedAt)}</b><span>Oldest lead</span></div>
       </div>
-      ${renderLeadWindow(lane.lastAssignedLead, lane.firstAssignedLead)}
-      <p class="coverage-line">${escapeHtml(coverageText)}</p>
-      <div class="counselor-list">${renderCounselorRows(lane.counselorBreakdown || [])}</div>
+      <div class="account-detail">
+        <span>${escapeHtml(coverageText)}</span>
+        ${renderLeadWindow(lane.lastAssignedLead, lane.firstAssignedLead)}
+      </div>
+      <div class="account-distribution">${distribution}</div>
     </article>
   `;
 }
@@ -171,13 +172,14 @@ function renderLeadPoint(label, lead) {
 }
 
 function renderCounselorRows(rows) {
-  if (!rows.length) return `<div class="lane-empty">No counselor leads synced.</div>`;
+  if (!rows.length) return `<div class="lane-empty">Counselor tags not synced.</div>`;
   return rows
     .map((row) => {
       const activeLabel = row.active === null ? "" : row.active ? "active" : "inactive";
+      const name = row.name === "No counselor" ? "Counselor tag missing" : row.name;
       return `
         <div class="counselor-row">
-          <div><strong>${escapeHtml(row.name)}</strong><span>${row.waiting} waiting ${activeLabel ? `| ${activeLabel}` : ""}</span></div>
+          <div><strong>${escapeHtml(name)}</strong><span>${row.waiting} waiting ${activeLabel ? `| ${activeLabel}` : ""}</span></div>
           <b>${row.count}</b>
         </div>
       `;
@@ -185,12 +187,27 @@ function renderCounselorRows(rows) {
     .join("");
 }
 
+function renderIssueRows(rows, fallbackCount) {
+  const cleanRows = rows.length ? rows : [{ name: "General", count: fallbackCount || 0 }];
+  return cleanRows
+    .slice(0, 5)
+    .map(
+      (row) => `
+        <div class="counselor-row issue-row">
+          <div><strong>${escapeHtml(row.name)}</strong><span>issue bucket</span></div>
+          <b>${row.count}</b>
+        </div>
+      `
+    )
+    .join("");
+}
+
 function renderExpiryRows(rows) {
-  if (!rows.length) return `<div class="lane-empty">No active chats inside the 120 minute expiry window.</div>`;
+  if (!rows.length) return `<div class="lane-empty compact-empty">No active chats inside 120 minute expiry window.</div>`;
   return rows
     .map(
       (row) => `
-        <div class="lane-mini-row expiry-row">
+        <div class="expiry-chip">
           <div><strong>${escapeHtml(row.studentName)}</strong><span>${escapeHtml(row.phone || "")}</span></div>
           <div><b>${minutes(row.expiryRemainingMinutes)}</b><span>remaining</span></div>
         </div>

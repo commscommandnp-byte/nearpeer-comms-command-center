@@ -78,7 +78,7 @@
           </div>
         </section>
 
-        <section class="metric-grid" aria-label="WATI critical metrics">
+        <section class="metric-grid executive-strip" aria-label="WATI critical metrics">
           <article class="metric danger">
             <span>Unassigned queue</span>
             <strong id="metricUnassignedMirror">-</strong>
@@ -111,55 +111,35 @@
           </article>
         </section>
 
-        <section class="panel ops-panel" id="assignment">
+        <section class="panel ops-panel command-layer" id="assignment">
           <div class="panel-head">
             <div>
-              <p class="section-kicker">Assigned To Me Control</p>
-              <h2>Team Account Lanes</h2>
+              <p class="section-kicker">Account Control Board</p>
+              <h2>Assigned To Me Command</h2>
             </div>
             <span id="opsDataBadge">Real data</span>
           </div>
 
-          <div class="ops-grid ops-grid-single">
-            <article class="ops-card admin-lane">
-              <div class="ops-card-head">
-                <div>
-                  <span>Admin Account</span>
-                  <strong id="adminAssignedToMe">-</strong>
-                </div>
-                <small>Assigned to me chats</small>
+          <div class="account-board">
+            <article class="account-row admin-row">
+              <div class="account-title">
+                <span>Admin Account</span>
+                <strong id="adminAssignedToMe">-</strong>
+                <small>Assigned to me</small>
               </div>
-              <div class="ops-stats admin-specific-stats">
-                <div><b id="adminUnassigned">-</b><span>Unassigned chats</span></div>
-                <div><b id="adminPending">-</b><span>waiting reply</span></div>
-                <div><b id="adminExpiringCount">-</b><span>about to expire</span></div>
-                <div><b id="adminExpiredToday">-</b><span>expired today</span></div>
+              <div class="account-metrics">
+                <div><b id="adminUnassigned">-</b><span>Unassigned</span></div>
+                <div><b id="adminPending">-</b><span>Waiting</span></div>
+                <div><b id="adminExpiringCount">-</b><span>Expiring</span></div>
+                <div><b id="adminExpiredToday">-</b><span>Expired today</span></div>
               </div>
-              <div class="lane-subhead">Reverse expiry timing</div>
-              <div id="adminExpiryRows" class="lane-mini-list"></div>
+              <div class="account-detail">
+                <span>Reverse expiry timing</span>
+                <div id="adminExpiryRows" class="compact-expiry-list"></div>
+              </div>
             </article>
+            <div id="accountRows" class="account-rows"></div>
           </div>
-
-          <div class="ops-grid ops-grid-single">
-            <article class="ops-card access-lane">
-              <div class="ops-card-head">
-                <div>
-                  <span>Access & Support</span>
-                  <strong id="accessAssigned">-</strong>
-                </div>
-                <small>Assigned to me chats</small>
-              </div>
-              <div class="ops-stats">
-                <div><b id="accessWaiting">-</b><span>waiting</span></div>
-                <div><b id="accessCatered">-</b><span>catered</span></div>
-                <div><b id="accessLastAssigned">-</b><span>last lead</span></div>
-              </div>
-              <div id="accessLeadWindow" class="lead-window"></div>
-              <div id="accessIssueRows" class="issue-pills"></div>
-            </article>
-          </div>
-
-          <div id="programLaneRows" class="program-lane-grid"></div>
         </section>
 
         <section class="layout-grid">
