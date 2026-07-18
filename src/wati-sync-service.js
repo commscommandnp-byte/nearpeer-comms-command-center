@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const { upsertRows } = require("./supabase-client");
 const { watiClient } = require("./wati-summary-service");
+const { deriveTagInsights } = require("./wati-taxonomy");
 
 function syncConfig() {
   return {
@@ -86,16 +87,27 @@ function normalizeContactConversation(contact, conversationId, waId) {
       ...Object.values(customAttributes).filter((value) => typeof value === "string")
     ])
   ];
+  const insights = deriveTagInsights(tags, customAttributes);
+  const enrichedAttributes = {
+    ...customAttributes,
+    counselor: insights.counselor || customAttributes.counselor,
+    stage: insights.stage || customAttributes.stage,
+    issueCategory: insights.issueCategory || customAttributes.issueCategory,
+    ownerRole: insights.ownerRole || customAttributes.ownerRole,
+    ownerName: insights.ownerName || customAttributes.ownerName,
+    assignedTo: insights.ownerName || customAttributes.assignedTo,
+    team: insights.ownerRole || customAttributes.team
+  };
 
   return {
     id: conversationId,
     wa_id: String(waId),
     student_name: name || "Unknown",
     team_id: null,
-    program: inferProgram({ tags, customAttributes, text: JSON.stringify(customAttributes) }),
+    program: insights.program || inferProgram({ tags, customAttributes, text: JSON.stringify(customAttributes) }),
     status: firstPresent(contact, ["contact_status", "status"]) || "open",
-    tags,
-    custom_attributes: customAttributes,
+    tags: insights.normalizedTags,
+    custom_attributes: enrichedAttributes,
     first_seen_at: parseDate(firstPresent(contact, ["created", "createdAt"])),
     raw: { source: "wati-contact-sync", contact },
     updated_at: new Date().toISOString()

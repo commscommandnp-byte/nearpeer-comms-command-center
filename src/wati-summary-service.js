@@ -96,7 +96,7 @@ function mapSupabaseConversation(row) {
     ticketId: row.ticket_id,
     waId: row.wa_id,
     senderName: row.student_name,
-    teamName: row.team_id || "Unmapped",
+    teamName: row.team_id || row.custom_attributes?.team || row.custom_attributes?.ownerRole || "Unmapped",
     operatorName: row.assigned_agent_id,
     program: row.program,
     status: row.status || "open",
