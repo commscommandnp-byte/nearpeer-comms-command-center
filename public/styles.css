@@ -873,6 +873,113 @@ td small {
   border-color: rgba(85, 242, 155, 0.44);
 }
 
+.team-orbit {
+  flex-wrap: wrap;
+  overflow-x: visible;
+}
+
+.team-node {
+  flex: 1 1 170px;
+  min-width: 0;
+}
+
+.team-node::after,
+.account-rows::before,
+.account-row.flow-card::after {
+  display: none;
+}
+
+.account-rows {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.account-row.flow-card {
+  min-height: 0;
+  padding: 16px;
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, rgba(85, 242, 155, 0.1), rgba(10, 20, 22, 0.82) 48%),
+    rgba(10, 20, 22, 0.86);
+}
+
+.flow-card-head {
+  min-height: 74px;
+  padding-bottom: 10px;
+}
+
+.flow-card-head strong {
+  margin-top: 7px;
+  font-size: 44px;
+}
+
+.flow-card-head i {
+  min-height: 26px;
+  white-space: nowrap;
+}
+
+.flow-stat-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 10px 0;
+}
+
+.flow-stat-grid div {
+  min-height: 58px;
+  padding: 9px;
+  border-radius: 12px;
+}
+
+.flow-stat-grid b {
+  font-size: 20px;
+}
+
+.flow-stat-grid span {
+  font-size: 10px;
+  line-height: 1.15;
+}
+
+.flow-window {
+  margin-bottom: 10px;
+  padding: 10px;
+}
+
+.flow-window .lead-window {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.flow-window .lead-window div {
+  padding: 8px;
+}
+
+.flow-window .lead-window strong {
+  font-size: 16px;
+}
+
+.flow-distribution {
+  max-height: 128px;
+  padding: 10px;
+}
+
+.flow-distribution > span {
+  color: var(--teal);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.flow-distribution .counselor-row {
+  min-height: 40px;
+  padding: 8px;
+}
+
+.flow-distribution .counselor-row b {
+  font-size: 18px;
+}
+
+.drilldown-panel {
+  scroll-margin-top: 16px;
+}
+
 .account-row {
   display: grid;
   width: 100%;

@@ -184,7 +184,10 @@ function renderAccountLane(lane) {
         <span>${escapeHtml(coverageText)}</span>
         ${renderLeadWindow(lane.lastAssignedLead, lane.firstAssignedLead)}
       </div>
-      <div class="flow-distribution">${distribution}</div>
+      <div class="flow-distribution">
+        <span>${escapeHtml(stats.distributionLabel)}</span>
+        ${distribution}
+      </div>
     </button>
   `;
 }
@@ -194,13 +197,12 @@ function accountStats(lane) {
     return {
       primary: { value: lane.assignedToMe || 0, label: "Assigned to me" },
       badge: "Dispatch",
+      distributionLabel: "Admin movement",
       items: [
-        { value: lane.assignedToMe || 0, label: "Assigned to me" },
         { value: lane.unassigned || 0, label: "Unassigned chats" },
         { value: lane.activeChats || lane.open || 0, label: "Active chats" },
         { value: timeAgo(lane.lastAssignedAt), label: "Last lead" },
-        { value: timeAgo(lane.firstAssignedAt), label: "Today first lead" },
-        { value: lane.expiredToday || 0, label: "Expired today" }
+        { value: timeAgo(lane.firstAssignedAt), label: "Today first lead" }
       ]
     };
   }
@@ -208,11 +210,12 @@ function accountStats(lane) {
     return {
       primary: { value: lane.assignedToMe || 0, label: "Assigned to me" },
       badge: "Automation",
+      distributionLabel: "Automation lane",
       items: [
-        { value: lane.assignedToMe || 0, label: "Assigned to me" },
         { value: lane.waiting || 0, label: "Waiting" },
         { value: lane.catered || 0, label: "Catered" },
-        { value: timeAgo(lane.lastAssignedAt), label: "Last handoff" }
+        { value: timeAgo(lane.lastAssignedAt), label: "Last handoff" },
+        { value: timeAgo(lane.firstAssignedAt), label: "First handoff" }
       ]
     };
   }
@@ -220,8 +223,8 @@ function accountStats(lane) {
     return {
       primary: { value: lane.assignedToMe || 0, label: "Assigned to me" },
       badge: "Access",
+      distributionLabel: "Issue distribution",
       items: [
-        { value: lane.assignedToMe || 0, label: "Assigned to me" },
         { value: lane.waiting || 0, label: "Waiting" },
         { value: lane.catered || 0, label: "Resolved" },
         { value: timeAgo(lane.lastAssignedAt), label: "Last access lead" },
@@ -232,8 +235,8 @@ function accountStats(lane) {
   return {
     primary: { value: lane.assignedToMe || 0, label: "Assigned to me" },
     badge: "Counseling",
+    distributionLabel: "Counselor distribution",
     items: [
-      { value: lane.assignedToMe || 0, label: "Assigned to me" },
       { value: lane.waiting || 0, label: "Waiting" },
       { value: lane.catered || 0, label: "Catered" },
       { value: timeAgo(lane.lastAssignedAt), label: "Bottom last lead" },
@@ -260,8 +263,9 @@ function compactAccounts(accounts) {
 
 function dataQualityLabel(operations) {
   const quality = operations.dataQuality;
-  if (!quality || !quality.total) return "Data quality pending";
+  if (!quality || !quality.total) return "Sync MVP | webhook pending";
   const suffix = operations.activeCounselorsConfigured ? "active list set" : "active list pending";
+  if (!quality.score) return `Sync MVP | webhook pending | ${suffix}`;
   return `Data quality ${quality.score}% | ${suffix}`;
 }
 
