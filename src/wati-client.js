@@ -2,6 +2,10 @@ function normalizeBaseUrl(baseUrl) {
   return String(baseUrl || "").replace(/\/+$/, "");
 }
 
+function normalizeToken(token) {
+  return String(token || "").trim().replace(/^Bearer\s+/i, "");
+}
+
 function buildCandidateUrls(baseUrl, endpoint) {
   const cleanBase = normalizeBaseUrl(baseUrl);
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
@@ -18,7 +22,7 @@ function buildCandidateUrls(baseUrl, endpoint) {
 class WatiClient {
   constructor({ baseUrl, token, fetchImpl = fetch }) {
     this.baseUrl = normalizeBaseUrl(baseUrl);
-    this.token = token;
+    this.token = normalizeToken(token);
     this.fetch = fetchImpl;
   }
 
@@ -81,18 +85,19 @@ class WatiClient {
 
   async discover() {
     const endpoints = [
-      { name: "contacts", endpoint: "/getContacts" },
-      { name: "messages", endpoint: "/getMessages" },
-      { name: "operators", endpoint: "/operators" },
-      { name: "teams", endpoint: "/teams" },
-      { name: "tickets", endpoint: "/tickets" },
-      { name: "conversations", endpoint: "/conversations" }
+      { name: "v3 contacts", endpoint: "/api/ext/v3/contacts?page_number=1&page_size=10", exactPath: true },
+      { name: "v1 contacts", endpoint: "/api/v1/getContacts?pageSize=10&pageNumber=1", exactPath: true },
+      { name: "v1 messages", endpoint: "/api/v1/getMessages?pageSize=10&pageNumber=1", exactPath: true },
+      { name: "operators", endpoint: "/api/v1/operators", exactPath: true },
+      { name: "teams", endpoint: "/api/v1/teams", exactPath: true },
+      { name: "tickets", endpoint: "/api/v1/tickets", exactPath: true },
+      { name: "conversations", endpoint: "/api/v1/conversations", exactPath: true }
     ];
 
     const results = [];
     for (const item of endpoints) {
       try {
-        const response = await this.request(item.endpoint);
+        const response = await this.request(item.endpoint, item.exactPath ? { exactUrl: `${this.baseUrl}${item.endpoint}` } : {});
         results.push({
           ...item,
           ok: true,
