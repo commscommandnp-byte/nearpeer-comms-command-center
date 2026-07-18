@@ -49,6 +49,9 @@ function normalizeConversation(raw, config = {}) {
     "lastOperatorMessageTime",
     "lastMessageSentTime"
   ]);
+  const lastCustomerDate = parseDate(lastCustomerMessageAt);
+  const lastAgentDate = parseDate(lastAgentReplyAt);
+  const hasPendingCustomerReply = Boolean(lastCustomerDate && (!lastAgentDate || lastCustomerDate.getTime() > lastAgentDate.getTime()));
   const assignedAt = firstPresent(raw, ["assignedAt", "assignedTime", "operatorAssignedAt", "created"]);
   const status = firstPresent(raw, ["status", "statusString", "ticketStatus", "conversationStatus"]) || "open";
   const program = inferProgram({ tags, customAttributes, team, text: firstPresent(raw, ["text", "lastMessage"]) }, config);
@@ -66,10 +69,11 @@ function normalizeConversation(raw, config = {}) {
     status,
     lastCustomerMessageAt,
     lastAgentReplyAt,
+    hasPendingCustomerReply,
     assignedAt,
     createdAt: firstPresent(raw, ["created", "createdAt", "timestamp"]),
-    waitingMinutes: minutesBetween(lastCustomerMessageAt),
-    replyDelayMinutes: lastAgentReplyAt ? Math.max(0, minutesBetween(lastCustomerMessageAt) - minutesBetween(lastAgentReplyAt)) : minutesBetween(lastCustomerMessageAt),
+    waitingMinutes: hasPendingCustomerReply ? minutesBetween(lastCustomerMessageAt) : 0,
+    replyDelayMinutes: hasPendingCustomerReply ? minutesBetween(lastCustomerMessageAt) : 0,
     assignedAgeMinutes: minutesBetween(assignedAt),
     sessionAgeMinutes: minutesBetween(lastCustomerMessageAt),
     raw
@@ -108,9 +112,9 @@ function summarize(conversations, config = {}) {
 
   const normalized = conversations.map((item) => normalizeConversation(item, config));
   const open = normalized.filter((item) => !/closed|resolved/i.test(String(item.status)));
-  const unassigned = open.filter((item) => !item.assignedTo && !item.assignedEmail);
+  const unassigned = open.filter((item) => item.hasPendingCustomerReply && !item.assignedTo && !item.assignedEmail);
   const adminHeld = open.filter((item) => adminTeams.has(String(item.team).toLowerCase()) || /admin/i.test(String(item.assignedTo || "")));
-  const delayed = open.filter((item) => (item.waitingMinutes || 0) >= replySla);
+  const delayed = open.filter((item) => item.hasPendingCustomerReply && (item.waitingMinutes || 0) >= replySla);
   const unassignedBreaches = unassigned.filter((item) => (item.waitingMinutes || 0) >= unassignedSla);
   const aboutToExpire = open.filter((item) => {
     if (item.sessionAgeMinutes === null) return false;
@@ -171,7 +175,7 @@ function groupBy(items, key, replySla) {
     const group = groups.get(name);
     group.open += 1;
     if (!item.assignedTo && !item.assignedEmail) group.unassigned += 1;
-    if ((item.waitingMinutes || 0) >= replySla) group.delayedReplies += 1;
+    if (item.hasPendingCustomerReply && (item.waitingMinutes || 0) >= replySla) group.delayedReplies += 1;
     if (item.sessionAgeMinutes !== null && 24 * 60 - item.sessionAgeMinutes <= 120) group.aboutToExpire += 1;
     group.oldestWaitingMinutes = Math.max(group.oldestWaitingMinutes, item.waitingMinutes || 0);
     group.lastAssignedAt = latest([group.lastAssignedAt, item.assignedAt]);
@@ -183,6 +187,7 @@ function groupBy(items, key, replySla) {
 function riskLevel(item, config) {
   const wait = item.waitingMinutes || 0;
   const remaining = item.sessionAgeMinutes === null ? Infinity : 24 * 60 - item.sessionAgeMinutes;
+  if (!item.hasPendingCustomerReply) return "normal";
   if (!item.assignedTo && wait >= config.unassignedSla) return "critical";
   if (remaining <= config.expiryCritical) return "critical";
   if (wait >= config.replySla * 2) return "critical";

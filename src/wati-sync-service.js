@@ -77,15 +77,22 @@ async function fetchMessages(client, waId, limit) {
 function normalizeContactConversation(contact, conversationId, waId) {
   const name = firstPresent(contact, ["name", "fullName", "displayName", "firstName", "username"]);
   const teams = normalizeTags(firstPresent(contact, ["teams"]));
-  const tags = [...new Set([...teams, ...normalizeTags(firstPresent(contact, ["segments", "tags", "labels"]))])];
-  const customAttributes = firstPresent(contact, ["custom_params", "customParams", "customAttributes"]) || {};
+  const customAttributes = normalizeCustomAttributes(firstPresent(contact, ["custom_params", "customParams", "customAttributes"]));
+  const tags = [
+    ...new Set([
+      ...teams,
+      ...normalizeTags(firstPresent(contact, ["segments", "tags", "labels"])),
+      ...normalizeTags(customAttributes.tags),
+      ...Object.values(customAttributes).filter((value) => typeof value === "string")
+    ])
+  ];
 
   return {
     id: conversationId,
     wa_id: String(waId),
     student_name: name || "Unknown",
     team_id: null,
-    program: inferProgram({ tags: teams, customAttributes, text: JSON.stringify(customAttributes) }),
+    program: inferProgram({ tags, customAttributes, text: JSON.stringify(customAttributes) }),
     status: firstPresent(contact, ["contact_status", "status"]) || "open",
     tags,
     custom_attributes: customAttributes,
@@ -122,10 +129,15 @@ function mergeConversationSignals(conversation, messages) {
   const incoming = latest(messages.filter((message) => message.direction === "incoming").map((message) => message.message_created_at));
   const outgoing = latest(messages.filter((message) => message.direction === "outgoing").map((message) => message.message_created_at));
   const latestMessage = latest(messages.map((message) => message.message_created_at));
+  const latestMessageRow = messages
+    .filter((message) => message.message_created_at)
+    .sort((a, b) => new Date(b.message_created_at).getTime() - new Date(a.message_created_at).getTime())[0];
+  const isWaitingOnNearpeer = Boolean(latestMessageRow && latestMessageRow.direction === "incoming");
+  const inferredStatus = isWaitingOnNearpeer ? "open" : "resolved";
 
   return {
     ...conversation,
-    status: "open",
+    status: inferredStatus,
     last_customer_message_at: incoming || latestMessage || conversation.first_seen_at,
     last_agent_reply_at: outgoing,
     session_expires_at: incoming ? new Date(new Date(incoming).getTime() + 24 * 60 * 60000).toISOString() : null
@@ -162,8 +174,23 @@ function normalizeTags(value) {
   return [];
 }
 
+function normalizeCustomAttributes(value) {
+  if (!value) return {};
+  if (Array.isArray(value)) {
+    return value.reduce((output, item) => {
+      if (!item || typeof item !== "object") return output;
+      const key = firstPresent(item, ["name", "key", "paramName", "fieldName", "title"]);
+      const val = firstPresent(item, ["value", "paramValue", "fieldValue", "text"]);
+      if (key && val !== null) output[key] = val;
+      return output;
+    }, {});
+  }
+  if (typeof value === "object") return value;
+  return {};
+}
+
 function inferProgram({ tags, customAttributes, text }) {
-  const explicit = firstPresent(customAttributes, ["program", "course", "category", "leadType"]);
+  const explicit = firstPresent(customAttributes, ["program", "Program", "course", "Course", "category", "Category", "leadType"]);
   if (explicit) return explicit;
   const haystack = [...tags, text].filter(Boolean).join(" ").toLowerCase();
   for (const program of ["CSS", "MDCAT", "CA", "Access", "Support", "Payment", "Refund"]) {
