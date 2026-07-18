@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nearpeer Comms Command Center</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="rail" aria-label="Command navigation">
+        <div class="brand-mark">NP</div>
+        <nav class="rail-nav">
+          <a class="active" href="#ops">Ops</a>
+          <a href="#queue">Queue</a>
+          <a href="#teams">Teams</a>
+          <a href="#programs">Programs</a>
+        </nav>
+      </aside>
+
+      <main class="workspace" id="ops">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">WATI Phase 1</p>
+            <h1>Nearpeer Comms Command Center</h1>
+          </div>
+          <div class="top-actions">
+            <div class="sync-pill">
+              <span class="pulse"></span>
+              <span id="syncStatus">Loading</span>
+            </div>
+            <span class="mode-pill" id="modeBadge">Sample mode</span>
+          </div>
+        </header>
+
+        <section class="command-band" aria-label="Live command summary">
+          <div class="command-copy">
+            <span class="live-chip">Live ops</span>
+            <h2 id="opsHeadline">Reading WATI queue</h2>
+            <p id="opsBrief">Preparing the current command picture.</p>
+          </div>
+          <div class="holo-stage" aria-label="WATI queue hologram">
+            <div class="holo-grid"></div>
+            <div class="holo-rings">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <div class="holo-towers" id="holoTowers">
+              <i data-label="Open"></i>
+              <i data-label="Assign"></i>
+              <i data-label="Delay"></i>
+              <i data-label="Expire"></i>
+            </div>
+            <div class="holo-core">
+              <strong id="holoCore">-</strong>
+              <span>WATI load</span>
+            </div>
+          </div>
+          <div class="shift-grid" aria-label="Shift health">
+            <div>
+              <span>Open</span>
+              <strong id="metricOpen">-</strong>
+            </div>
+            <div>
+              <span>Unassigned</span>
+              <strong id="metricUnassigned">-</strong>
+            </div>
+            <div>
+              <span>Delayed</span>
+              <strong id="metricDelayed">-</strong>
+            </div>
+            <div>
+              <span>Critical</span>
+              <strong id="metricCriticalExpiry">-</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="metric-grid" aria-label="WATI critical metrics">
+          <article class="metric danger">
+            <span>Unassigned queue</span>
+            <strong id="metricUnassignedMirror">-</strong>
+            <small>oldest <b id="metricOldestUnassigned">-</b></small>
+          </article>
+          <article class="metric danger">
+            <span>Admin held</span>
+            <strong id="metricAdminHeld">-</strong>
+            <small>move to owner</small>
+          </article>
+          <article class="metric warning">
+            <span>Reply delay</span>
+            <strong id="metricDelayedMirror">-</strong>
+            <small>over active SLA</small>
+          </article>
+          <article class="metric warning">
+            <span>Session expiry</span>
+            <strong id="metricExpiring">-</strong>
+            <small>next 120 minutes</small>
+          </article>
+          <article class="metric">
+            <span>Oldest assigned</span>
+            <strong id="metricOldestAssigned">-</strong>
+            <small>last assigned <b id="metricLastAssigned">-</b></small>
+          </article>
+          <article class="metric">
+            <span>Load balance</span>
+            <strong id="metricAgents">-</strong>
+            <small>active owners</small>
+          </article>
+        </section>
+
+        <section class="layout-grid">
+          <article class="panel action-panel" id="queue">
+            <div class="panel-head">
+              <div>
+                <p class="section-kicker">Priority Queue</p>
+                <h2>Immediate Action Required</h2>
+              </div>
+              <span id="actionCount">0 items</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Program</th>
+                    <th>Team</th>
+                    <th>Owner</th>
+                    <th>Counselor</th>
+                    <th>Waiting</th>
+                    <th>Expiry</th>
+                    <th>Risk</th>
+                  </tr>
+                </thead>
+                <tbody id="actionRows"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <aside class="insight-stack" aria-label="Operational intelligence">
+            <article class="panel insight-panel">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">Command Signal</p>
+                  <h2>Now</h2>
+                </div>
+              </div>
+              <div id="signalRows" class="signal-list"></div>
+            </article>
+
+            <article class="panel insight-panel">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">SLA Pulse</p>
+                  <h2>Response Pressure</h2>
+                </div>
+              </div>
+              <div class="pressure-meter">
+                <div id="pressureFill"></div>
+              </div>
+              <p class="pressure-copy" id="pressureCopy">Calculating pressure.</p>
+            </article>
+          </aside>
+        </section>
+
+        <section class="split" id="teams">
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="section-kicker">Team Load</p>
+                <h2>Teams</h2>
+              </div>
+            </div>
+            <div id="teamRows" class="stack"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="section-kicker">Ownership</p>
+                <h2>Agents & Counselors</h2>
+              </div>
+            </div>
+            <div id="agentRows" class="stack"></div>
+          </article>
+        </section>
+
+        <section class="panel" id="programs">
+          <div class="panel-head">
+            <div>
+              <p class="section-kicker">Demand Mix</p>
+              <h2>Program Buckets</h2>
+            </div>
+          </div>
+          <div id="programRows" class="program-grid"></div>
+        </section>
+      </main>
+    </div>
+    <script src="/app.js"></script>
+  </body>
+</html>

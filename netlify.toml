@@ -1,0 +1,22 @@
+[build]
+  publish = "public"
+  command = "node scripts/netlify-build-check.js"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+[[redirects]]
+  from = "/api/health"
+  to = "/.netlify/functions/health"
+  status = 200
+
+[[redirects]]
+  from = "/api/wati/summary"
+  to = "/.netlify/functions/wati-summary"
+  status = 200
+
+[[redirects]]
+  from = "/api/wati/discover"
+  to = "/.netlify/functions/wati-discover"
+  status = 200

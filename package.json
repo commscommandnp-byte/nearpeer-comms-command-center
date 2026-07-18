@@ -1,0 +1,14 @@
+{
+  "name": "nearpeer-comms-command-center",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Nearpeer Comms Command Center - WATI-first live operations dashboard.",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "discover:wati": "node scripts/discover-wati.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
