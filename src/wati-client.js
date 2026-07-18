@@ -6,6 +6,10 @@ function normalizeToken(token) {
   return String(token || "").trim().replace(/^Bearer\s+/i, "");
 }
 
+function tenantlessBaseUrl(baseUrl) {
+  return normalizeBaseUrl(baseUrl).replace(/\/\d+$/, "");
+}
+
 function buildCandidateUrls(baseUrl, endpoint) {
   const cleanBase = normalizeBaseUrl(baseUrl);
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
@@ -85,9 +89,8 @@ class WatiClient {
 
   async discover() {
     const endpoints = [
-      { name: "v3 contacts", endpoint: "/api/ext/v3/contacts?page_number=1&page_size=10", exactPath: true },
+      { name: "v3 contacts", endpoint: "/api/ext/v3/contacts?page_number=1&page_size=10", exactUrl: `${tenantlessBaseUrl(this.baseUrl)}/api/ext/v3/contacts?page_number=1&page_size=10` },
       { name: "v1 contacts", endpoint: "/api/v1/getContacts?pageSize=10&pageNumber=1", exactPath: true },
-      { name: "v1 messages", endpoint: "/api/v1/getMessages?pageSize=10&pageNumber=1", exactPath: true },
       { name: "operators", endpoint: "/api/v1/operators", exactPath: true },
       { name: "teams", endpoint: "/api/v1/teams", exactPath: true },
       { name: "tickets", endpoint: "/api/v1/tickets", exactPath: true },
@@ -95,9 +98,14 @@ class WatiClient {
     ];
 
     const results = [];
+    let sampleContact = null;
     for (const item of endpoints) {
       try {
-        const response = await this.request(item.endpoint, item.exactPath ? { exactUrl: `${this.baseUrl}${item.endpoint}` } : {});
+        const response = await this.request(item.endpoint, item.exactUrl ? { exactUrl: item.exactUrl } : item.exactPath ? { exactUrl: `${this.baseUrl}${item.endpoint}` } : {});
+        if (item.name === "v1 contacts") {
+          const contacts = extractFirstArray(response.data, ["contact_list", "contacts", "result", "data"]);
+          sampleContact = contacts.find((contact) => contact && typeof contact === "object" && (contact.wAid || contact.phone || contact.whatsappNumber || contact.id));
+        }
         results.push({
           ...item,
           ok: true,
@@ -116,8 +124,42 @@ class WatiClient {
       }
     }
 
+    if (sampleContact) {
+      const target = sampleContact.wAid || sampleContact.phone || sampleContact.whatsappNumber || sampleContact.id;
+      const endpoint = `/api/v1/getMessages/${encodeURIComponent(target)}?pageSize=10&pageNumber=1`;
+      try {
+        const response = await this.request(endpoint, { exactUrl: `${this.baseUrl}${endpoint}` });
+        results.push({
+          name: "v1 contact messages",
+          endpoint,
+          ok: true,
+          url: response.url,
+          status: response.status,
+          shape: describeShape(response.data),
+          sample: sanitizeSample(response.data)
+        });
+      } catch (error) {
+        results.push({
+          name: "v1 contact messages",
+          endpoint,
+          ok: false,
+          error: error.code || error.message,
+          failures: error.failures || []
+        });
+      }
+    }
+
     return results;
   }
+}
+
+function extractFirstArray(value, keys) {
+  if (Array.isArray(value)) return value;
+  if (!value || typeof value !== "object") return [];
+  for (const key of keys) {
+    if (Array.isArray(value[key])) return value[key];
+  }
+  return [];
 }
 
 function describeShape(value) {
