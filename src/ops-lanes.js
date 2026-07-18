@@ -52,6 +52,7 @@ function buildOpsLanes(conversations, metricConfig = {}, config = opsConfig()) {
     admin,
     programs,
     access,
+    dataQuality: dataQuality(open),
     activeCounselorsConfigured: config.activeCounselors.size > 0
   };
 }
@@ -211,6 +212,36 @@ function issueBreakdown(items) {
   return Array.from(map.entries())
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count);
+}
+
+function dataQuality(items) {
+  const total = items.length;
+  if (!total) {
+    return {
+      score: 0,
+      total: 0,
+      mappedTeams: 0,
+      assignedOwners: 0,
+      counselorTags: 0,
+      reliableSignals: 0
+    };
+  }
+  const mappedTeams = items.filter((item) => item.team && item.team !== "Unmapped").length;
+  const assignedOwners = items.filter((item) => item.assignedTo).length;
+  const counselorTags = items.filter((item) => !isMissingCounselor(item)).length;
+  const reliableSignals = items.filter((item) => {
+    const confidence = item.raw?.customAttributes?.dataConfidence || item.raw?.custom_attributes?.dataConfidence || {};
+    return confidence.hasScopedOperator || confidence.hasDirectOperator || confidence.hasMessageOperator || confidence.hasTags;
+  }).length;
+  const score = Math.round(((mappedTeams / total) * 0.25 + (assignedOwners / total) * 0.3 + (counselorTags / total) * 0.25 + (reliableSignals / total) * 0.2) * 100);
+  return {
+    score,
+    total,
+    mappedTeams,
+    assignedOwners,
+    counselorTags,
+    reliableSignals
+  };
 }
 
 function isAdminItem(item, config) {

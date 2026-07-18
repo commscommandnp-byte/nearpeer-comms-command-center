@@ -112,7 +112,7 @@ function renderOperations(operations) {
   $("summaryAssignedPending").textContent = accountRows.reduce((total, item) => total + (item.waiting || item.pendingDispatch || 0), 0);
   $("summaryExpiringSoon").textContent = accountRows.reduce((total, item) => total + (item.expiring || item.activeExpiring || 0), 0);
   $("summaryExpiredToday").textContent = admin.expiredToday ?? 0;
-  $("opsDataBadge").textContent = operations.activeCounselorsConfigured ? "Active counselors set" : "Active list pending";
+  $("opsDataBadge").textContent = dataQualityLabel(operations);
 
   $("accountRows").innerHTML = accountRows.map(renderAccountLane).join("");
   renderDrilldown(accountRows.find((item) => item.key === state.selectedAccountKey) || accountRows[0]);
@@ -165,6 +165,13 @@ function compactAccounts(accounts) {
     aboutToExpireRows: [],
     ...item
   }));
+}
+
+function dataQualityLabel(operations) {
+  const quality = operations.dataQuality;
+  if (!quality || !quality.total) return "Data quality pending";
+  const suffix = operations.activeCounselorsConfigured ? "active list set" : "active list pending";
+  return `Data quality ${quality.score}% | ${suffix}`;
 }
 
 function renderDrilldown(account) {

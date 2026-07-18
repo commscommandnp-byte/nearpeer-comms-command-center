@@ -71,17 +71,19 @@ async function getSupabaseSummary(config) {
 }
 
 function mapSupabaseConversation(row) {
+  const attrs = row.custom_attributes || {};
   return {
     conversationId: row.id,
     ticketId: row.ticket_id,
     waId: row.wa_id,
     senderName: row.student_name,
-    teamName: row.team_id || row.custom_attributes?.team || row.custom_attributes?.ownerRole || "Unmapped",
-    operatorName: row.assigned_agent_id,
+    teamName: row.team_id || attrs.teamName || attrs.team || attrs.ownerRole || "Unmapped",
+    operatorName: row.assigned_agent_id || attrs.operatorName || attrs.assignedTo || attrs.ownerName,
+    operatorEmail: attrs.operatorEmail || attrs.assignedEmail,
     program: row.program,
     status: row.status || "open",
     tags: row.tags || [],
-    customAttributes: row.custom_attributes || {},
+    customAttributes: attrs,
     created: row.first_seen_at || row.updated_at,
     assignedAt: row.assigned_at,
     lastCustomerMessageAt: row.last_customer_message_at,

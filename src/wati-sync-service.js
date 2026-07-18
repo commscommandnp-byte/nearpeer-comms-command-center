@@ -5,7 +5,7 @@ const { deriveTagInsights } = require("./wati-taxonomy");
 
 function syncConfig() {
   return {
-    contactLimit: clamp(Number(process.env.WATI_SYNC_CONTACT_LIMIT || 15), 1, 50),
+    contactLimit: clamp(Number(process.env.WATI_SYNC_CONTACT_LIMIT || 100), 1, 200),
     messageLimit: clamp(Number(process.env.WATI_SYNC_MESSAGE_LIMIT || 10), 1, 50)
   };
 }
@@ -17,17 +17,21 @@ async function syncWatiToSupabase({ client = watiClient(), config = syncConfig()
     throw error;
   }
 
-  const contacts = await fetchContacts(client, config.contactLimit);
+  const [contacts, operators] = await Promise.all([
+    fetchContacts(client, config.contactLimit),
+    fetchOperators(client).catch(() => [])
+  ]);
   const conversationRows = [];
   const messageRows = [];
   const failures = [];
+  const operatorIndex = buildOperatorIndex(operators);
 
   for (const contact of contacts) {
     const waId = contact.wa_id || contact.wAid || contact.phone || contact.whatsappNumber;
     if (!waId) continue;
 
     const conversationId = String(waId);
-    const baseConversation = normalizeContactConversation(contact, conversationId, waId);
+    const baseConversation = normalizeContactConversation(contact, conversationId, waId, operatorIndex);
     const messageResult = await fetchMessages(client, waId, config.messageLimit).catch((error) => {
       failures.push({
         waId: maskWaId(waId),
@@ -40,7 +44,7 @@ async function syncWatiToSupabase({ client = watiClient(), config = syncConfig()
     const messages = extractMessages(messageResult ? messageResult.data : null);
     const normalizedMessages = messages.map((message) => normalizeMessage(message, conversationId, waId, contact));
     messageRows.push(...normalizedMessages);
-    conversationRows.push(mergeConversationSignals(baseConversation, normalizedMessages));
+    conversationRows.push(mergeConversationSignals(baseConversation, normalizedMessages, operatorIndex));
   }
 
   await upsertRows("wati_conversations", conversationRows, "id");
@@ -58,16 +62,117 @@ async function syncWatiToSupabase({ client = watiClient(), config = syncConfig()
 }
 
 async function fetchContacts(client, limit) {
-  const tenantless = client.baseUrl.replace(/\/\d+$/, "");
-  const v3Endpoint = `/api/ext/v3/contacts?page_number=1&page_size=${limit}`;
+  const batches = [];
   try {
-    const response = await client.request(v3Endpoint, { exactUrl: `${tenantless}${v3Endpoint}` });
-    return extractArray(response.data, ["contact_list", "contacts", "data", "result"]).slice(0, limit);
-  } catch {
-    const endpoint = `/api/v1/getContacts?pageSize=${limit}&pageNumber=1`;
-    const response = await client.request(endpoint, { exactUrl: `${client.baseUrl}${endpoint}` });
-    return extractArray(response.data, ["contact_list", "contacts", "data", "result"]).slice(0, limit);
+    batches.push(...await fetchV3Contacts(client, limit));
+  } catch {}
+
+  try {
+    batches.push(...await fetchV1Contacts(client, limit));
+  } catch (error) {
+    if (!batches.length) throw error;
   }
+
+  return mergeContacts(batches).slice(0, limit);
+}
+
+async function fetchV3Contacts(client, limit) {
+  const tenantless = client.baseUrl.replace(/\/\d+$/, "");
+  const pageSize = Math.min(50, limit);
+  const contacts = [];
+  for (let page = 1; contacts.length < limit; page += 1) {
+    const endpoint = `/api/ext/v3/contacts?page_number=${page}&page_size=${pageSize}`;
+    const response = await client.request(endpoint, { exactUrl: `${tenantless}${endpoint}` });
+    const batch = extractArray(response.data, ["contact_list", "contacts", "data", "result"]).map((contact) => ({ ...contact, _watiSource: "v3" }));
+    contacts.push(...batch);
+    if (batch.length < pageSize) break;
+  }
+  return contacts.slice(0, limit);
+}
+
+async function fetchV1Contacts(client, limit) {
+  const pageSize = Math.min(50, limit);
+  const contacts = [];
+  for (let page = 1; contacts.length < limit; page += 1) {
+    const endpoint = `/api/v1/getContacts?pageSize=${pageSize}&pageNumber=${page}`;
+    const response = await client.request(endpoint, { exactUrl: `${client.baseUrl}${endpoint}` });
+    const batch = extractArray(response.data, ["contact_list", "contacts", "data", "result"]).map((contact) => ({ ...contact, _watiSource: "v1" }));
+    contacts.push(...batch);
+    if (batch.length < pageSize) break;
+  }
+  return contacts.slice(0, limit);
+}
+
+async function fetchOperators(client) {
+  const endpoint = "/api/v1/operators";
+  const response = await client.request(endpoint, { exactUrl: `${client.baseUrl}${endpoint}` });
+  return extractArray(response.data, ["result", "operators", "data", "items"]);
+}
+
+function mergeContacts(contacts) {
+  const map = new Map();
+  for (const contact of contacts) {
+    const id = String(contact.wa_id || contact.wAid || contact.phone || contact.whatsappNumber || contact.id || "");
+    if (!id) continue;
+    const existing = map.get(id) || {};
+    map.set(id, deepMerge(existing, contact));
+  }
+  return Array.from(map.values());
+}
+
+function deepMerge(left, right) {
+  const output = { ...left, ...right };
+  for (const key of ["custom_params", "customParams", "customAttributes"]) {
+    output[key] = mergeCustomValue(left[key], right[key]);
+  }
+  for (const key of ["teams", "segments", "tags", "labels", "scopedUsers", "teamIds"]) {
+    output[key] = uniqueValues([...normalizeArray(left[key]), ...normalizeArray(right[key])]);
+  }
+  output._watiSource = uniqueValues([...normalizeArray(left._watiSource), ...normalizeArray(right._watiSource)]).join("+");
+  return output;
+}
+
+function mergeCustomValue(left, right) {
+  if (Array.isArray(left) || Array.isArray(right)) return [...normalizeArray(left), ...normalizeArray(right)];
+  return {
+    ...(left && typeof left === "object" ? left : {}),
+    ...(right && typeof right === "object" ? right : {})
+  };
+}
+
+function buildOperatorIndex(operators) {
+  const map = new Map();
+  for (const operator of operators) {
+    const normalized = {
+      id: firstPresent(operator, ["id", "_id", "userId"]),
+      name: firstPresent(operator, ["fullName", "name", "firstName", "displayName", "email"]),
+      email: firstPresent(operator, ["email", "operatorEmail"]),
+      teamIds: normalizeArray(firstPresent(operator, ["teamIds", "teams"])),
+      raw: operator
+    };
+    for (const key of [normalized.id, normalized.email, normalized.name]) {
+      if (key) map.set(String(key).toLowerCase(), normalized);
+    }
+  }
+  return map;
+}
+
+function findOperator(value, operatorIndex) {
+  for (const item of normalizeArray(value)) {
+    if (!item) continue;
+    if (typeof item === "object") {
+      const direct = {
+        id: firstPresent(item, ["id", "_id", "userId"]),
+        name: firstPresent(item, ["fullName", "name", "firstName", "displayName", "email"]),
+        email: firstPresent(item, ["email", "operatorEmail"]),
+        raw: item
+      };
+      return operatorIndex.get(String(direct.id || "").toLowerCase()) || operatorIndex.get(String(direct.email || "").toLowerCase()) || operatorIndex.get(String(direct.name || "").toLowerCase()) || direct;
+    }
+    const match = operatorIndex.get(String(item).toLowerCase());
+    if (match) return match;
+  }
+  return null;
 }
 
 async function fetchMessages(client, waId, limit) {
@@ -75,10 +180,13 @@ async function fetchMessages(client, waId, limit) {
   return client.request(endpoint, { exactUrl: `${client.baseUrl}${endpoint}` });
 }
 
-function normalizeContactConversation(contact, conversationId, waId) {
+function normalizeContactConversation(contact, conversationId, waId, operatorIndex) {
   const name = firstPresent(contact, ["name", "fullName", "displayName", "firstName", "username"]);
   const teams = normalizeTags(firstPresent(contact, ["teams"]));
   const customAttributes = normalizeCustomAttributes(firstPresent(contact, ["custom_params", "customParams", "customAttributes"]));
+  const scopedOperator = findOperator(firstPresent(contact, ["scopedUsers", "assignedUsers", "operators"]), operatorIndex);
+  const directOperatorName = firstPresent(contact, ["assignedOperatorName", "operatorName", "assignedTo", "assigneeName"]);
+  const directOperatorEmail = firstPresent(contact, ["assignedOperatorEmail", "operatorEmail", "assigneeEmail"]);
   const tags = [
     ...new Set([
       ...teams,
@@ -95,8 +203,20 @@ function normalizeContactConversation(contact, conversationId, waId) {
     issueCategory: insights.issueCategory || customAttributes.issueCategory,
     ownerRole: insights.ownerRole || customAttributes.ownerRole,
     ownerName: insights.ownerName || customAttributes.ownerName,
-    assignedTo: insights.ownerName || customAttributes.assignedTo,
-    team: insights.ownerRole || customAttributes.team
+    assignedTo: scopedOperator?.name || directOperatorName || insights.ownerName || customAttributes.assignedTo,
+    assignedEmail: scopedOperator?.email || directOperatorEmail || customAttributes.assignedEmail,
+    operatorName: scopedOperator?.name || directOperatorName || customAttributes.operatorName,
+    operatorEmail: scopedOperator?.email || directOperatorEmail || customAttributes.operatorEmail,
+    teamName: teams[0] || customAttributes.teamName,
+    team: teams[0] || insights.ownerRole || customAttributes.team,
+    teamIds: normalizeArray(firstPresent(contact, ["teamIds"])),
+    dataConfidence: {
+      contactSource: contact._watiSource || "unknown",
+      hasScopedOperator: Boolean(scopedOperator),
+      hasDirectOperator: Boolean(directOperatorName || directOperatorEmail),
+      hasTags: tags.length > 0,
+      assignmentTimeIsInferred: true
+    }
   };
 
   return {
@@ -110,7 +230,7 @@ function normalizeContactConversation(contact, conversationId, waId) {
     custom_attributes: enrichedAttributes,
     first_seen_at: parseDate(firstPresent(contact, ["created", "createdAt"])),
     assigned_at: parseDate(firstPresent(contact, ["last_updated", "lastUpdated", "updatedAt", "created", "createdAt"])),
-    raw: { source: "wati-contact-sync", contact },
+    raw: { source: "wati-contact-sync", contact, scopedOperator },
     updated_at: new Date().toISOString()
   };
 }
@@ -138,7 +258,7 @@ function normalizeMessage(message, conversationId, waId, contact) {
   };
 }
 
-function mergeConversationSignals(conversation, messages) {
+function mergeConversationSignals(conversation, messages, operatorIndex) {
   const incoming = latest(messages.filter((message) => message.direction === "incoming").map((message) => message.message_created_at));
   const outgoing = latest(messages.filter((message) => message.direction === "outgoing").map((message) => message.message_created_at));
   const latestMessage = latest(messages.map((message) => message.message_created_at));
@@ -147,14 +267,36 @@ function mergeConversationSignals(conversation, messages) {
     .sort((a, b) => new Date(b.message_created_at).getTime() - new Date(a.message_created_at).getTime())[0];
   const isWaitingOnNearpeer = Boolean(latestMessageRow && latestMessageRow.direction === "incoming");
   const inferredStatus = isWaitingOnNearpeer ? "open" : "resolved";
+  const latestOperator = latestOutgoingOperator(messages, operatorIndex);
+  const customAttributes = {
+    ...conversation.custom_attributes,
+    operatorName: conversation.custom_attributes.operatorName || latestOperator?.name,
+    operatorEmail: conversation.custom_attributes.operatorEmail || latestOperator?.email,
+    assignedTo: conversation.custom_attributes.assignedTo || latestOperator?.name,
+    assignedEmail: conversation.custom_attributes.assignedEmail || latestOperator?.email,
+    dataConfidence: {
+      ...(conversation.custom_attributes.dataConfidence || {}),
+      hasMessageOperator: Boolean(latestOperator),
+      statusIsInferredFromLatestMessage: true
+    }
+  };
 
   return {
     ...conversation,
     status: inferredStatus,
+    custom_attributes: customAttributes,
     last_customer_message_at: incoming || latestMessage || conversation.first_seen_at,
     last_agent_reply_at: outgoing,
     session_expires_at: incoming ? new Date(new Date(incoming).getTime() + 24 * 60 * 60000).toISOString() : null
   };
+}
+
+function latestOutgoingOperator(messages, operatorIndex) {
+  const message = messages
+    .filter((item) => item.direction === "outgoing" && (item.operator_name || item.operator_email))
+    .sort((a, b) => new Date(b.message_created_at || 0).getTime() - new Date(a.message_created_at || 0).getTime())[0];
+  if (!message) return null;
+  return findOperator([message.operator_email, message.operator_name], operatorIndex) || { name: message.operator_name, email: message.operator_email };
 }
 
 function extractMessages(value) {
@@ -185,6 +327,17 @@ function normalizeTags(value) {
   if (Array.isArray(value)) return value.map((item) => (typeof item === "string" ? item : item.name || item.title || item.id)).filter(Boolean);
   if (typeof value === "string") return value.split(",").map((item) => item.trim()).filter(Boolean);
   return [];
+}
+
+function normalizeArray(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.filter((item) => item !== undefined && item !== null && item !== "");
+  if (typeof value === "string") return value.split(",").map((item) => item.trim()).filter(Boolean);
+  return [value];
+}
+
+function uniqueValues(values) {
+  return [...new Set(values.filter((item) => item !== undefined && item !== null && item !== ""))];
 }
 
 function normalizeCustomAttributes(value) {
